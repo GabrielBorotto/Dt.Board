@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Painel Fiscal</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="brand">
+        <span class="brand-diamond" id="brandDiamond">&#9670;</span>
+        <img class="company-logo" id="companyLogo" style="display:none;" alt="Logo da empresa">
+        <div>
+          <div class="brand-name" id="companyName">Minha Empresa</div>
+          <div class="brand-sub">Painel Fiscal</div>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="status-block">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">carregando…</span>
+        </div>
+        <button class="icon-btn" id="refreshBtn" title="Atualizar agora">&#8635;</button>
+        <button class="icon-btn" id="editLayoutBtn" title="Editar layout (mover/redimensionar)" aria-label="Ativar edição de layout">&#9638;</button>
+        <button class="icon-btn" id="copyLayoutBtn" title="Copiar layout atual (para usar como padrão no código)" aria-label="Copiar layout atual" style="display:none;">&#128203;</button>
+        <button class="icon-btn" id="resetLayoutBtn" title="Restaurar layout padrão" aria-label="Restaurar layout padrão">&#8634;</button>
+        <button class="icon-btn" id="settingsBtn" title="Configurações">&#9881;</button>
+        <div class="clock">
+          <div id="clockTime">--:--:--</div>
+          <div id="clockDate">--</div>
+        </div>
+        <div class="app-version" id="appVersion"></div>
+      </div>
+    </header>
+
+    <div id="errorBar" class="error-bar" style="display:none;"></div>
+
+    <div class="dashboard-grid" id="dashboardGrid">
+      <div class="widget" data-widget="saidas">
+        <div class="panel-head">
+          <div class="panel-title-row">
+            <div class="panel-title">Saídas (vendas) — <span id="saidasPeriodLabel">últimos 12 meses</span></div>
+            <div class="period-total" id="saidasTotal">Total: R$ 0</div>
+          </div>
+          <div class="period-controls">
+            <div class="period-tabs" data-target="saidas">
+              <button class="period-tab active" data-period="12m" type="button">12 meses</button>
+              <button class="period-tab" data-period="thisMonth" type="button">Este mês</button>
+              <button class="period-tab" data-period="lastMonth" type="button">Mês passado</button>
+              <button class="period-tab" data-period="range" type="button">Intervalo</button>
+            </div>
+            <div class="day-range" id="saidasRange">
+              <label>De <input type="date" id="saidasFrom"></label>
+              <label>Até <input type="date" id="saidasTo"></label>
+            </div>
+          </div>
+        </div>
+        <div class="chart-row">
+          <div class="chart-body"><canvas id="saidasChart"></canvas></div>
+        </div>
+        <span class="drag-handle" title="Mover">⠿</span>
+        <span class="resize-handle" title="Redimensionar"></span>
+      </div>
+
+      <div class="widget" data-widget="entradas">
+        <div class="panel-head">
+          <div class="panel-title-row">
+            <div class="panel-title">Entradas — <span id="entradasPeriodLabel">últimos 12 meses</span></div>
+            <div class="period-total" id="entradasTotal">Total: R$ 0</div>
+          </div>
+          <div class="period-controls">
+            <div class="period-tabs" data-target="entradas">
+              <button class="period-tab active" data-period="12m" type="button">12 meses</button>
+              <button class="period-tab" data-period="thisMonth" type="button">Este mês</button>
+              <button class="period-tab" data-period="lastMonth" type="button">Mês passado</button>
+              <button class="period-tab" data-period="range" type="button">Intervalo</button>
+            </div>
+            <div class="day-range" id="entradasRange">
+              <label>De <input type="date" id="entradasFrom"></label>
+              <label>Até <input type="date" id="entradasTo"></label>
+            </div>
+          </div>
+        </div>
+        <div class="chart-row">
+          <div class="chart-body"><canvas id="entradasChart"></canvas></div>
+        </div>
+        <span class="drag-handle" title="Mover">⠿</span>
+        <span class="resize-handle" title="Redimensionar"></span>
+      </div>
+
+      <div class="widget margem-widget" data-widget="margem">
+        <div class="panel-head">
+          <div class="panel-title-row">
+            <div class="panel-title">Margem por grupo — <span id="margemPeriodLabel">este mês</span></div>
+          </div>
+          <div class="period-controls">
+            <div class="period-tabs" data-target="margem">
+              <button class="period-tab active" data-period="thisMonth" type="button">Este mês</button>
+              <button class="period-tab" data-period="lastMonth" type="button">Mês passado</button>
+              <button class="period-tab" data-period="range" type="button">Intervalo</button>
+            </div>
+            <div class="day-range" id="margemRange">
+              <label>De <input type="date" id="margemFrom"></label>
+              <label>Até <input type="date" id="margemTo"></label>
+            </div>
+          </div>
+        </div>
+        <div class="margem-table-wrap">
+          <table class="margem-table">
+            <thead>
+              <tr>
+                <th class="margem-arrow-col"></th>
+                <th>Grupo / Item</th>
+                <th class="num">Qtd. vendida</th>
+                <th class="num">Valor final</th>
+                <th class="num">Custo</th>
+                <th class="num">Margem</th>
+                <th class="num">Margem %</th>
+              </tr>
+            </thead>
+            <tbody id="margemBody">
+              <tr><td colspan="7" class="margem-loading">Carregando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <span class="drag-handle" title="Mover">⠿</span>
+        <span class="resize-handle" title="Redimensionar"></span>
+      </div>
+
+      <div class="widget kpi-widget" data-widget="receber">
+        <div class="panel-title">Contas a receber (não liquidadas)</div>
+        <div class="kpi-trio duo">
+          <div class="kpi-item"><div class="kpi-item-label">Até 30 dias</div><div class="kpi-item-value" id="receberAte30">R$ 0</div></div>
+          <div class="kpi-item alerta"><div class="kpi-item-label">+ de 30 dias</div><div class="kpi-item-value" id="receberMais30">R$ 0</div></div>
+        </div>
+        <span class="drag-handle" title="Mover">⠿</span>
+        <span class="resize-handle" title="Redimensionar"></span>
+      </div>
+
+      <div class="widget kpi-widget" data-widget="pagar">
+        <div class="panel-title">Contas a pagar (não liquidadas)</div>
+        <div class="kpi-trio duo">
+          <div class="kpi-item"><div class="kpi-item-label">Até 30 dias</div><div class="kpi-item-value" id="pagarAte30">R$ 0</div></div>
+          <div class="kpi-item alerta"><div class="kpi-item-label">+ de 30 dias</div><div class="kpi-item-value" id="pagarMais30">R$ 0</div></div>
+        </div>
+        <span class="drag-handle" title="Mover">⠿</span>
+        <span class="resize-handle" title="Redimensionar"></span>
+      </div>
+
+      <div class="widget impostos-widget" data-widget="impostos">
+        <div class="panel-head">
+          <div class="panel-title-row">
+            <div class="panel-title">Impostos — <span id="impostosPeriodLabel">este mês</span></div>
+          </div>
+          <div class="period-controls">
+            <div class="period-tabs" data-target="impostos">
+              <button class="period-tab" data-period="year" type="button">Este ano</button>
+              <button class="period-tab active" data-period="thisMonth" type="button">Este mês</button>
+              <button class="period-tab" data-period="lastMonth" type="button">Mês passado</button>
+              <button class="period-tab" data-period="month" type="button">Escolher mês</button>
+            </div>
+            <div class="month-picker-wrap" id="impostosMonthWrap">
+              <input type="month" id="impostosMonth">
+            </div>
+          </div>
+        </div>
+        <div class="tax-table-wrap">
+        <table class="tax-table">
+          <thead>
+            <tr><th></th><th class="num">Saída</th><th class="num">Entrada</th><th class="num">Resultado</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>ICMS</td>
+              <td class="num" id="impIcmsSaida">R$ 0</td>
+              <td class="num" id="impIcmsEntrada">R$ 0</td>
+              <td class="num" id="impIcmsResultado">R$ 0</td>
+            </tr>
+            <tr>
+              <td>PIS</td>
+              <td class="num" id="impPisSaida">R$ 0</td>
+              <td class="num" id="impPisEntrada">R$ 0</td>
+              <td class="num" id="impPisResultado">R$ 0</td>
+            </tr>
+            <tr>
+              <td>COFINS</td>
+              <td class="num" id="impCofinsSaida">R$ 0</td>
+              <td class="num" id="impCofinsEntrada">R$ 0</td>
+              <td class="num" id="impCofinsResultado">R$ 0</td>
+            </tr>
+            <tr class="total-row">
+              <td>Total</td>
+              <td class="num" id="impTotalSaida">R$ 0</td>
+              <td class="num" id="impTotalEntrada">R$ 0</td>
+              <td class="num" id="impTotalResultado">R$ 0</td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+        <span class="drag-handle" title="Mover">⠿</span>
+        <span class="resize-handle" title="Redimensionar"></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="settingsOverlay" class="overlay" style="display:none;">
+    <div class="modal">
+      <div class="modal-title">Configurações</div>
+      <label>Nome da empresa
+        <input type="text" id="cfgCompanyName">
+      </label>
+      <label>Aparência
+        <div class="theme-toggle">
+          <button type="button" class="theme-btn" id="themeLightBtn" title="Modo claro" aria-label="Modo claro">&#9728;&#65039;</button>
+          <button type="button" class="theme-btn" id="themeDarkBtn" title="Modo escuro" aria-label="Modo escuro">&#127769;</button>
+        </div>
+      </label>
+      <label>Logo da empresa
+        <div class="logo-upload-row">
+          <img id="cfgLogoPreview" class="logo-preview" style="display:none;" alt="Prévia da logo">
+          <div class="logo-upload-actions">
+            <input type="file" id="cfgLogoFile" accept="image/*" style="display:none;">
+            <button type="button" class="btn-secondary" id="cfgLogoChoose">Escolher imagem…</button>
+            <button type="button" class="btn-secondary" id="cfgLogoRemove" style="display:none;">Remover logo</button>
+          </div>
+        </div>
+      </label>
+      <label>Caminho do arquivo de Saídas (ftnota.dbf)
+        <input type="text" id="cfgFtnota" placeholder="\\SERVIDOR\pasta\ftnota.dbf">
+      </label>
+      <label>Caminho do arquivo de Entradas (ftentr.dbf)
+        <input type="text" id="cfgFtentr" placeholder="\\SERVIDOR\pasta\ftentr.dbf">
+      </label>
+      <label>Caminho do arquivo de Devoluções de venda (ftcomp.dbf)
+        <input type="text" id="cfgFtcomp" placeholder="\\SERVIDOR\pasta\ftcomp.dbf">
+      </label>
+      <label>Caminho do arquivo de Contas a receber (ftcrec.dbf)
+        <input type="text" id="cfgFtcrec" placeholder="\\SERVIDOR\pasta\ftcrec.dbf">
+      </label>
+      <label>Caminho do arquivo de Contas a pagar (ftcpag.dbf)
+        <input type="text" id="cfgFtcpag" placeholder="\\SERVIDOR\pasta\ftcpag.dbf">
+      </label>
+      <label>Caminho do arquivo de Itens de venda (ftlnota.dbf)
+        <input type="text" id="cfgFtlnota" placeholder="\\SERVIDOR\pasta\ftlnota.dbf">
+      </label>
+      <label>Caminho do arquivo de Grupos (ftgrup.dbf)
+        <input type="text" id="cfgFtgrup" placeholder="\\SERVIDOR\pasta\ftgrup.dbf">
+      </label>
+      <label>Caminho do arquivo de Cadastro de produtos (ftmpri.dbf)
+        <input type="text" id="cfgFtmpri" placeholder="\\SERVIDOR\pasta\ftmpri.dbf">
+      </label>
+      <label>Caminho do arquivo de Itens de compra (ftlentr.dbf)
+        <input type="text" id="cfgFtlentr" placeholder="\\SERVIDOR\pasta\ftlentr.dbf">
+      </label>  
+      <label>Caminho do arquivo de Natureza de operação (CFOP) (ftnope.dbf)
+        <input type="text" id="cfgFtnope" placeholder="\\SERVIDOR\pasta\ftnope.dbf">
+      </label>
+      <label>Atualizar automaticamente a cada (minutos)
+        <input type="number" id="cfgRefreshMinutes" min="1" step="1">
+      </label>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="cfgCancel">Cancelar</button>
+        <button class="btn-primary" id="cfgSave">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="vendor/chart.umd.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>

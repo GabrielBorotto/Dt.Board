@@ -1,0 +1,19 @@
+# dependencias (cada pessoa roda "npm install" e baixa a sua)
+node_modules/
+
+# instaladores gerados (nao sao codigo-fonte, sao build; use Releases do GitHub pra isso se quiser)
+dist/
+
+# logs e arquivos temporarios
+*.log
+npm-debug.log*
+
+# arquivos do sistema operacional
+.DS_Store
+Thumbs.db
+
+# arquivos de configuracao/cache que o app gera em tempo de execucao (nunca ficam na pasta
+# do projeto, mas por seguranca caso algum apareça aqui sem querer)
+config.json
+cache.json
+erro.log
