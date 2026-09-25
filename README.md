@@ -7,8 +7,7 @@ Aplicativo Windows instalável que lê direto dos arquivos `.dbf` do sistema FAT
 - **Entradas**: gráfico de `NTOTNOT` (com abas de período) + ICMS/PIS/COFINS/total do período
 - **Contas a receber**: total liquidado hoje / este mês / este ano (`VALDUP`, só quando `DPGDUP` está preenchida)
 - **Contas a pagar**: total liquidado hoje / este mês / este ano (`VALCPG`, só quando `DPGCPG` está preenchida)
-
-Notas com `NDTCANC` preenchido são sempre excluídas dos totais de Saídas.
+- **Margem por Grupos**: Tabela dos grupos / Quantidade vendida / Total faturado / Custo da venda / Margem em valor e porcentagem; Filtrado com `NSITPED=1` e `NDEVNOT`.
 
 ## Como funciona por baixo dos panos
 
