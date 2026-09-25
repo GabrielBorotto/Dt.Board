@@ -1,6 +1,6 @@
 {
-  "name": "painel-fiscal",
-  "version": "1.1.0",
+  "name": "Painel-Fiscal",
+  "version": "1.1.2",
   "description": "Painel fiscal (saidas, entradas, contas a receber/pagar) lendo direto dos arquivos .dbf do sistema FAT",
   "main": "main.js",
   "author": "",

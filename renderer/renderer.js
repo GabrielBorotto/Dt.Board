@@ -22,19 +22,6 @@
   function parseISODate(s) { const p = s.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); }
   function ehFimDeSemana(d) { const dow = d.getDay(); return dow === 0 || dow === 6; } // domingo=0, sábado=6
 
-  // Media movel centrada (3 pontos, com menos pontos nas bordas) - usada so pra desenhar a
-  // linha do gráfico diário de forma mais suave (visual parecido com o gráfico de 12 meses),
-  // sem alterar o Total nem os valores reais mostrados no tooltip ao passar o mouse.
-  function mediaMovel(values, janela) {
-    const metade = Math.floor(janela / 2);
-    return values.map((_, i) => {
-      const ini = Math.max(0, i - metade), fim = Math.min(values.length - 1, i + metade);
-      let soma = 0, n = 0;
-      for (let j = ini; j <= fim; j++) { soma += values[j]; n++; }
-      return soma / n;
-    });
-  }
-
   // ---------- Cálculo de séries a partir dos buckets diários reais ----------
   // dailyArr: [{date:'YYYY-MM-DD', fat, icms, pis, cofins}, ...] ordenado
   function seriesFor12Meses(dailyArr) {
@@ -160,6 +147,8 @@
           fill: true,
           tension: 0.35,
           pointRadius: 0,
+          pointHoverRadius: 6,
+          pointHitRadius: 12,
           borderWidth: 2,
         }],
       },
@@ -205,11 +194,8 @@
     const s = computeSeries(state.data[target], w.period, w.from, w.to);
     const chart = ensureChart(target + 'Chart');
     chart.data.labels = s.labels;
-    // suaviza a linha so nos graficos "por dia" (mes/intervalo) - o de 12 meses ja e naturalmente
-    // suave (poucos pontos, totais mensais) e nao precisa disso.
-    const ehVisaoDiaria = w.period !== '12meses';
-    chart.data.datasets[0].data = ehVisaoDiaria ? mediaMovel(s.values, 3) : s.values;
-    chart._valoresReais = s.values; // o tooltip usa esse array pra mostrar o valor real do dia, nao o suavizado
+    chart.data.datasets[0].data = s.values;
+    chart._valoresReais = s.values; // o tooltip usa esse array pra mostrar o valor real do dia
     chart.update();
     $(target + 'PeriodLabel').textContent = periodLabel(w.period, w.from, w.to);
     $(target + 'Total').textContent = 'Total: ' + fmtFull(s.total);
