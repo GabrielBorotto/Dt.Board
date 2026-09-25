@@ -7,7 +7,7 @@ Aplicativo Windows instalável que lê direto dos arquivos `.dbf` do sistema FAT
 - **Entradas**: gráfico de `NTOTNOT` (com abas de período) + ICMS/PIS/COFINS/total do período
 - **Contas a receber**: total liquidado hoje / este mês / este ano (`VALDUP`, só quando `DPGDUP` está preenchida)
 - **Contas a pagar**: total liquidado hoje / este mês / este ano (`VALCPG`, só quando `DPGCPG` está preenchida)
-- **Margem por Grupos**: Tabela dos grupos / Quantidade vendida / Total faturado / Custo da venda / Margem em valor e porcentagem; Filtrado com `NSITPED=1` e `NDEVNOT`.
+- **Margem por Grupos**: Tabela dos grupos / Quantidade vendida / Total faturado / Custo da venda / Margem em valor e porcentagem; Filtrado com `NSITPED=1`, `NDEVNOT` e `NNATOPE`.
 
 ## Como funciona por baixo dos panos
 
@@ -75,7 +75,7 @@ Pra usar um ícone próprio: crie um arquivo `build/icon.ico` (256x256) e adicio
 
 | Arquivo | Campos | Regra |
 |---|---|---|
-| `ftnota.dbf` | `NDTEMIS`, `NTOTFAT`, `NVALICM`+`NVALICM1`, `NPISNOT`, `NCOFNOT`, `NDTCANC` | exclui se `NDTCANC` preenchido |
+| `ftnota.dbf` | `NDTEMIS`, `NTOTFAT`, `NVALICM`+`NVALICM1`, `NPISNOT`, `NCOFNOT`, `NDTCANC` | exclui se `NSITPED, NDEVNOT e NNATOPE` forem diferente do esperado |
 | `ftentr.dbf` | `NDTENTR` (data de entrada, não de emissão!), `NTOTNOT`, `NVALICM`, `NVALPIS`, `NVALFIN` | sem filtro de cancelamento (não existe nesse arquivo) |
 | `ftcomp.dbf` | `NDTEMIS`, `NTOTNOT`, `NVALICM`+`NVALICM1`, `NPISNOT`, `NCOFNOT`, `NDTCANC` | devoluções de venda (CFOP 1.202/1.411/1.949) — somado junto com o `ftentr.dbf` para compor os totais de Entrada, conforme confirmado contra o relatório "Resumo Impostos Entrada x Saída" do próprio FAT |
 | `ftcrec.dbf` | `VALDUP`, `DPGDUP`, `VCTDUP` | só entra se `DPGDUP` estiver vazio (não liquidado); agrupado em até 30 / +30 dias de atraso do vencimento |
