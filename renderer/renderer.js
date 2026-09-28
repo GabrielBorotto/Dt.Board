@@ -22,6 +22,52 @@
   function parseISODate(s) { const p = s.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); }
   function ehFimDeSemana(d) { const dow = d.getDay(); return dow === 0 || dow === 6; } // domingo=0, sábado=6
 
+  //Calcula a data da Pascoa (domingo) de um ano - algoritmo de Meeus/Jones/Butcher,
+  //Usado pra derivar os feriados moveis (Sexta-Feira Santa, Corpus Christi).
+  function calcularPascoa(ano) {
+    const a = ano % 19, b = Math.floor(ano / 100), c = ano % 100;
+    const d = Math.floor(b / 4), e = b % 4;
+    const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4), k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const mes = Math.floor((h + l - 7 * m + 114) / 31);
+    const dia = ((h + l - 7 * m + 114) % 31) + 1;
+    return new Date(ano, mes - 1, dia);
+  }
+  const feriadosPorAno = {}; //cache: ano -> Set de "YYYY-MM-DD", para não recalcular sempre.
+
+  // Feriados nacionais + Rio Grande do Sul, calculando para um ano específico.
+  // Carnaval NAO entra - empresa vende os dias.
+  function feriadosDoAno(ano) {
+    if (feriadosPorAno[ano]) return feriadosPorAno[ano];
+    const chave = (d) => toDateInputValue(d);
+    const set = new Set();
+
+    // fixos nacionais: contraternização, tiradentes, trabalho, independencia
+    // aparecida, finados, proclamação da republica, consciencia negra, natal
+    [[0, 1], [3, 21], [4, 1], [8, 7], [9, 12], [10, 2], [10, 15], [10, 20], [11, 25]].forEach(([mes, dia]) => set.add(chave(new Date(ano, mes, dia))));
+
+    // moveis (a partir da Pascoa): Sexta-Feira Santa, Corpus Christi
+    const pascoa = calcularPascoa(ano);
+    [-47, -2, 60].forEach((offset) => {
+      const d = new Date(pascoa);
+      d.setDate(d.getDate() + offset);
+      set.add(chave(d));
+    });
+
+    //Rio Grande do Sul: Revolução Farroupilha
+    set.add(chave(new Date(ano, 8, 20)));
+
+    feriadosPorAno[ano] = set;
+    return set;
+  }
+
+  function ehFeriado(d) {
+    return feriadosDoAno(d.getFullYear()).has(toDateInputValue(d));
+  }
+
   // ---------- Cálculo de séries a partir dos buckets diários reais ----------
   // dailyArr: [{date:'YYYY-MM-DD', fat, icms, pis, cofins}, ...] ordenado
   function seriesFor12Meses(dailyArr) {
@@ -31,14 +77,32 @@
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       months.push({ key: d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'), label: d.toLocaleDateString('pt-BR', { month: 'short' }) });
     }
+    // mesma janela de 12 meses, mas exatamente um ano atras (ex: se hoje mostra out/25 a
+    // set/26, essa lista vira out/24 a set/25) - assim "outubro" sempre compara com "outubro".
+    const monthsAnoPassado = months.map((m) => {
+      const [ano, mes] = m.key.split('-').map(Number);
+      return { key: (ano - 1) + '-' + String(mes).padStart(2, '0') };
+    });
+
     const sums = {};
     months.forEach((m) => { sums[m.key] = 0; });
+    const sumsAnoPassado = {};
+    monthsAnoPassado.forEach((m) => { sumsAnoPassado[m.key] = 0; });
+
     dailyArr.forEach((r) => {
       const k = r.date.slice(0, 7);
       if (sums[k] !== undefined) sums[k] += r.fat;
+      if (sumsAnoPassado[k] !== undefined) sumsAnoPassado[k] += r.fat;
     });
+
     const values = months.map((m) => sums[m.key]);
-    return { labels: months.map((m) => m.label), values, total: values.reduce((a, b) => a + b, 0) };
+    const valuesAnoPassado = monthsAnoPassado.map((m) => sumsAnoPassado[m.key]);
+    return {
+      labels: months.map((m) => m.label),
+      values,
+      valuesAnoPassado,
+      total: values.reduce((a, b) => a + b, 0),
+    };
   }
 
   function seriesForMonth(dailyArr, year, monthIdx0) {
@@ -56,7 +120,7 @@
       const dataDia = new Date(year, monthIdx0, d);
       // pula fim de semana sem nenhuma venda, pra nao criar um "dente de serra" no gráfico -
       // se por acaso teve venda num sábado/domingo, esse dia continua aparecendo normalmente.
-      if (ehFimDeSemana(dataDia) && !r) continue;
+      if ((ehFimDeSemana(dataDia) || ehFeriado(dataDia)) && !r) continue;
       labels.push(String(d).padStart(2, '0') + '/' + String(monthIdx0 + 1).padStart(2, '0'));
       values.push(r ? r.fat : 0);
     }
@@ -75,7 +139,7 @@
         const key = toDateInputValue(cursor);
         const r = byDay[key];
         // mesma regra: pula fim de semana sem venda, pra nao quebrar a visualizacao
-        if (ehFimDeSemana(cursor) && !r) { cursor.setDate(cursor.getDate() + 1); continue; }
+        if ((ehFimDeSemana(cursor) || ehFeriado(cursor)) && !r) { cursor.setDate(cursor.getDate() + 1); continue; }
         labels.push(String(cursor.getDate()).padStart(2, '0') + '/' + String(cursor.getMonth() + 1).padStart(2, '0'));
         values.push(r ? r.fat : 0);
         cursor.setDate(cursor.getDate() + 1);
@@ -109,7 +173,7 @@
       saidas: { period: '12m', from: toDateInputValue(daysAgo(7)), to: toDateInputValue(yesterday()) },
       entradas: { period: '12m', from: toDateInputValue(daysAgo(7)), to: toDateInputValue(yesterday()) },
       impostos: { period: 'thisMonth', month: toMonthInputValue(new Date()) },
-      margem: { period: 'thisMonth', from: toDateInputValue(daysAgo(30)), to: toDateInputValue(yesterday()) },
+      margem: { period: 'thisMonth', from: toDateInputValue(daysAgo(30)), to: toDateInputValue(yesterday()), sort: 'padrao' },
     },
   };
   let margemData = [];
@@ -126,8 +190,17 @@
       gold: cs.getPropertyValue('--gold').trim() || '#e0a941',
       muted: cs.getPropertyValue('--muted').trim() || '#8b95a8',
       line: cs.getPropertyValue('--line').trim() || '#232c3d',
+      compare: cs.getPropertyValue('--compare').trim() || '#7fc4c9',
     };
   }
+
+    // Faz as duas linhas do grafico (este ano / ano passado) se misturarem de verdade (modo
+  // aditivo) onde se cruzam, em vez de uma simplesmente tampar a outra por cima.
+  const blendPlugin = {
+    id: 'blend',
+    beforeDatasetsDraw(chart) { chart.ctx.save(); chart.ctx.globalCompositeOperation = 'lighter'; },
+    afterDatasetsDraw(chart) { chart.ctx.restore(); },
+  };
 
   function ensureChart(canvasId) {
     if (charts[canvasId]) return charts[canvasId];
@@ -140,26 +213,47 @@
       type: 'line',
       data: {
         labels: [],
-        datasets: [{
-          data: [],
-          borderColor: c.gold,
-          backgroundColor: gradient,
-          fill: true,
-          tension: 0.35,
-          pointRadius: 0,
-          pointHoverRadius: 6,
-          pointHitRadius: 12,
-          borderWidth: 2,
-        }],
+        datasets: [
+          {
+            label: 'Este ano',
+            data: [],
+            borderColor: c.gold,
+            backgroundColor: gradient,
+            fill: true,
+            tension: 0.35,
+            pointRadius: 0,
+            pointHoverRadius: 6,
+            pointHitRadius: 12,
+            borderWidth: 2,
+          },
+          {
+            // segunda linha (mesmo periodo do ano passado) - so recebe dado quando for
+            // Saidas + aba "12 meses"; nos outros casos fica com data:[] (vazia) e nao
+            // desenha nada, nem aparece no tooltip.
+            label: 'Ano passado',
+            data: [],
+            borderColor: c.compare,
+            backgroundColor: 'transparent',
+            fill: false,
+            tension: 0.35,
+            pointRadius: 0,
+            pointHoverRadius: 6,
+            pointHitRadius: 12,
+            borderWidth: 2,
+          },
+        ],
       },
+      plugins: [blendPlugin],
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
         plugins: { legend: { display: false }, tooltip: {
           callbacks: { label: (ctx) => {
-            const brutos = charts[canvasId]._valoresReais;
+            const brutos = ctx.datasetIndex === 1 ? charts[canvasId]._valoresReaisAnoPassado : charts[canvasId]._valoresReais;
             const v = (brutos && brutos[ctx.dataIndex] !== undefined) ? brutos[ctx.dataIndex] : ctx.parsed.y;
-            return fmtFull(v);
+            const temComparacao = ctx.chart.data.datasets[1] && ctx.chart.data.datasets[1].data.length > 0;
+            return temComparacao ? (ctx.dataset.label + ': ' + fmtFull(v)) : fmtFull(v);
           } },
         } },
         scales: {
@@ -170,7 +264,7 @@
     });
     return charts[canvasId];
   }
-
+  
   function hexToRgba(hex, alpha) {
     const h = hex.replace('#', '');
     const bigint = parseInt(h.length === 3 ? h.split('').map((ch) => ch + ch).join('') : h, 16);
@@ -196,6 +290,12 @@
     chart.data.labels = s.labels;
     chart.data.datasets[0].data = s.values;
     chart._valoresReais = s.values; // o tooltip usa esse array pra mostrar o valor real do dia
+
+    // segunda linha (ano passado) so aparece nas Saidas, na aba "12 meses"
+    const mostrarAnoPassado = target === 'saidas' && w.period === '12m' && s.valuesAnoPassado;
+    chart.data.datasets[1].data = mostrarAnoPassado ? s.valuesAnoPassado : [];
+    chart._valoresReaisAnoPassado = mostrarAnoPassado ? s.valuesAnoPassado : [];
+
     chart.update();
     $(target + 'PeriodLabel').textContent = periodLabel(w.period, w.from, w.to);
     $(target + 'Total').textContent = 'Total: ' + fmtFull(s.total);
@@ -303,14 +403,35 @@
     return parseISODate(from).toLocaleDateString('pt-BR') + ' a ' + parseISODate(to).toLocaleDateString('pt-BR');
   }
 
+  // Calcula a margem % como numero (nao formatado) - usado so pra ordenar a tabela.
+  // Retorna null quando nao da pra calcular (valorFinal=0), pra esses casos sempre
+  // irem pro final da lista, independente da direcao escolhida.
+  function margemPctValue(margem, valorFinal) {
+    return valorFinal ? margem / valorFinal : null;
+  }
+
+  function compararPorMargemPct(sortMode) {
+    return (a, b) => {
+      const pa = margemPctValue(a.margem, a.valorFinal);
+      const pb = margemPctValue(b.margem, b.valorFinal);
+      if (pa === null && pb === null) return 0;
+      if (pa === null) return 1;
+      if (pb === null) return -1;
+      return sortMode === 'maiorPct' ? pb - pa : pa - pb;
+    };
+  }
+
   function renderMargemTable() {
     const tbody = $('margemBody');
     if (!margemData || margemData.length === 0) {
       tbody.innerHTML = '<tr><td colspan="7" class="margem-loading">Nenhuma venda no período selecionado.</td></tr>';
       return;
     }
+    const sortMode = state.widgets.margem.sort || 'padrao';
+    const grupos = sortMode === 'padrao' ? margemData : [...margemData].sort(compararPorMargemPct(sortMode));
+
     let html = '';
-    margemData.forEach((g) => {
+    grupos.forEach((g) => {
       const expanded = margemExpanded.has(g.codigo);
       const gCor = g.margem < 0 ? 'negative' : 'positive';
       html += '<tr class="margem-row-grupo' + (expanded ? ' expanded' : '') + '" data-grupo="' + escapeHtml(g.codigo) + '">' +
@@ -323,7 +444,8 @@
         '<td class="num ' + gCor + '">' + fmtPct(g.margem, g.valorFinal) + '</td>' +
         '</tr>';
       if (expanded) {
-        g.itens.forEach((it) => {
+        const itens = sortMode === 'padrao' ? g.itens : [...g.itens].sort(compararPorMargemPct(sortMode));
+        itens.forEach((it) => {
           const iCor = it.margem < 0 ? 'negative' : 'positive';
           html += '<tr class="margem-row-item">' +
             '<td></td>' +
@@ -408,6 +530,16 @@
           }
           renderImpostosWidget();
         }
+      });
+    });
+  });
+  document.querySelectorAll('.sort-tabs').forEach((group) => {
+    const target = group.dataset.target;
+    group.querySelectorAll('.sort-tab').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        group.querySelectorAll('.sort-tab').forEach((b) => b.classList.toggle('active', b === btn));
+        state.widgets[target].sort = btn.dataset.sort;
+        if (target === 'margem') renderMargemTable();
       });
     });
   });

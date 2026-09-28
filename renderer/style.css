@@ -1,13 +1,13 @@
 :root{
   --bg:#0b0f17; --panel:#121826; --panel-2:#0e131d; --line:#232c3d;
   --text:#eef2f8; --muted:#8b95a8; --gold:#e0a941; --gold-soft:rgba(224,169,65,.15);
-  --green:#3ecf8e; --red:#e5566d;
+  --green:#3ecf8e; --red:#e5566d; --compare:#7fc4c9; 
   --font-body:'Segoe UI',system-ui,sans-serif; --font-display:'Segoe UI',system-ui,sans-serif;
 }
 :root[data-theme="light"]{
   --bg:#f3f5fa; --panel:#ffffff; --panel-2:#eef1f7; --line:#dde2ec;
   --text:#1a2233; --muted:#6b7486; --gold:#c6820f; --gold-soft:rgba(198,130,15,.15);
-  --green:#188a58; --red:#c42e46;
+  --green:#188a58; --red:#c42e46; --compare:#1f7a8c; 
 }
 *{box-sizing:border-box;}
 html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);overflow:hidden;}
@@ -17,7 +17,7 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-famil
 header{display:flex;justify-content:space-between;align-items:center;}
 .brand{display:flex;align-items:center;gap:.6vw;}
 .brand-diamond{color:var(--gold);font-size:22px;}
-.company-logo{height:34px;max-width:120px;object-fit:contain;border-radius:4px;}
+.company-logo{height: 46px;max-width:160px;object-fit:contain;border-radius:4px;}
 .brand-name{font-weight:700;font-size:clamp(16px,1.3vw,22px);}
 .brand-sub{color:var(--muted);font-size:clamp(11px,.8vw,13px);}
 
@@ -72,6 +72,11 @@ body.edit-mode #resetLayoutBtn{display:flex;}
 .period-tab{background:transparent;border:none;color:var(--muted);font-family:var(--font-body);font-size:clamp(10px,.72vw,12px);padding:.35em .7em;border-radius:6px;cursor:pointer;white-space:nowrap;}
 .period-tab:hover{color:var(--text);}
 .period-tab.active{background:var(--gold);color:#1a1200;font-weight:600;}
+
+.sort-tabs{display:flex;gap:.3vw;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:2px;}
+.sort-tab{background:transparent;border:none;color:var(--muted);font-family:var(--font-body);font-size:clamp(10px,.72vw,12px);padding:.35em .7em;border-radius:6px;cursor:pointer;white-space:nowrap;}
+.sort-tab:hover{color:var(--text);}
+.sort-tab.active{background:var(--gold);color:#1a1200;font-weight:600;}
 
 .day-range{display:none;align-items:center;gap:.6vw;}
 .day-range.visible{display:flex;}
