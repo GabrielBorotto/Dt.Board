@@ -105,6 +105,47 @@
     };
   }
 
+  // Soma o MES INTEIRO de um ano especifico (nunca corta no dia de hoje, mesmo que seja o
+  // mes atual) - a meta sempre compara contra o total completo do mesmo mes, ano passado,
+  // nao uma fatia parcial dele.
+  function totalMesAnoPassado(dailyArr, year, monthIdx0) {
+    const prefixAnoPassado = (year - 1) + '-' + String(monthIdx0 + 1).padStart(2, '0');
+    let total = 0;
+    dailyArr.forEach((r) => {if (r.date.startsWith(prefixAnoPassado)) total += r.fat; });
+    return total;
+  }
+
+  // Mesma ideia, mas pra um intervalo de datas livre- desloca as duas datas um ano pra tras
+  // e soma os dias desse intervalo deslocado.
+  function totalRangeAnoPassado(dailyArr, fromStr, toStr) {
+    const from = parseISODate(fromStr), to = parseISODate(toStr);
+    if (!from || !to || from > to) return 0;
+    const fromAnoPassado = new Date(from.getFullYear() - 1, from.getMonth(), from.getDate());
+    const toAnoPassado = new Date(to.getFullYear() - 1, to.getMonth(), to.getDate());
+    const byDay = {};
+    dailyArr.forEach((r) => { byDay[r.date] = r; });
+    let total = 0;
+    const cursor = new Date(fromAnoPassado);
+    while (cursor <= toAnoPassado) {
+      const r = byDay[toDateInputValue(cursor)];
+      if (r) total += r.fat;
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return total;
+  }
+
+  // Ponto de entrada unico - espelha o computeSeries, mas so retorna o TOTAL do mesmo
+  // periodo, um ano atras (usado pra calcular a meta).
+  function totalAnoPassado(dailyArr, period, from, to) {
+    const now = new Date();
+    if (period === 'thisMonth') return totalMesAnoPassado(dailyArr, now.getFullYear(), now.getMonth());
+    if (period === 'lastMonth') { const d = new Date(now.getFullYear(), now.getMonth() - 1, 1); return totalMesAnoPassado(dailyArr, d.getFullYear(), d.getMonth()); }
+    if (period === 'range') return totalRangeAnoPassado(dailyArr, from, to);
+    const s = seriesFor12Meses(dailyArr); // reaproveita o que a gente ja calcula pra 12 meses
+    return (s.valuesAnoPassado || []).reduce((a, b) => a + b, 0);
+  }
+  
+
   function seriesForMonth(dailyArr, year, monthIdx0) {
     const prefix = year + '-' + String(monthIdx0 + 1).padStart(2, '0');
     const byDay = {};
@@ -178,6 +219,8 @@
   };
   let margemData = [];
   let margemExpanded = new Set();
+  let metaConfig = { metaCrescimentoPct: 10, metaFixaSaidas: '' };
+
   function yesterday() { const d = new Date(); d.setDate(d.getDate() - 1); return d; }
   function daysAgo(n) { const d = new Date(); d.setDate(d.getDate() - n); return d; }
   function toMonthInputValue(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
@@ -283,7 +326,7 @@
     }
   }
 
-  function renderChartWidget(target) {
+    function renderChartWidget(target) {
     const w = state.widgets[target];
     const s = computeSeries(state.data[target], w.period, w.from, w.to);
     const chart = ensureChart(target + 'Chart');
@@ -299,6 +342,27 @@
     chart.update();
     $(target + 'PeriodLabel').textContent = periodLabel(w.period, w.from, w.to);
     $(target + 'Total').textContent = 'Total: ' + fmtFull(s.total);
+
+    if (target === 'saidas') renderMetaSaidas(s.total, w.period, w.from, w.to);
+  }
+
+  // Calcula e desenha a meta de faturamento das Saidas. Usa o valor fixo das Configuracoes
+  // quando preenchido (e a aba for "Este mes"); caso contrario, calcula automaticamente como
+  // o mesmo periodo do ano passado + a % de crescimento configurada.
+  function renderMetaSaidas(totalAtual, period, from, to) {
+    const usaFixa = period === 'thisMonth' && metaConfig.metaFixaSaidas !== '' && !isNaN(Number(metaConfig.metaFixaSaidas));
+    let meta;
+    if (usaFixa) {
+      meta = Number(metaConfig.metaFixaSaidas);
+    } else {
+      const anoPassado = totalAnoPassado(state.data.saidas, period, from, to);
+      meta = anoPassado * (1 + (Number(metaConfig.metaCrescimentoPct) || 0) / 100);
+    }
+
+    const pct = meta > 0 ? (totalAtual / meta * 100) : null;
+    $('saidasMetaValor').textContent = fmtFull(meta);
+    $('saidasMetaPct').textContent = pct === null ? '—' : Math.round(pct) + '%';
+    $('saidasProgressoFill').style.width = (pct === null ? 0 : Math.min(100, pct)) + '%';
   }
 
   function renderAgingWidget(prefix, aging) {
@@ -763,6 +827,24 @@
   window.api.onDashboardScanning((isScanning) => { if (isScanning) setStatus('scanning', 'atualizando…'); });
   window.api.onDashboardError((msg) => setStatus('error', 'erro: ' + msg));
 
+  let updateProntoParaInstalar = false;
+
+  window.api.onUpdateAvailable((version) => {
+    $('updateBadgeText').textContent = 'Baixando atualização v' + version + '...';
+    $('updateBadge').style.display = 'flex';
+  });
+
+  window.api.onUpdateDownloaded((version) => {
+    updateProntoParaInstalar = true;
+    $('updateBadgeText').textContent = 'Reiniciar para atualizar (v' + version +')';
+    $('updateBadge').style.display = 'flex';
+  });
+
+  $('updateBadge').addEventListener('click', () => {
+    if (!updateProntoParaInstalar) return; // ainda baixando, clicar nao faz nada ainda
+    window.api.installUpdateNow();
+  });
+
   function applyLogo(dataUrl) {
     const img = $('companyLogo');
     const diamond = $('brandDiamond');
@@ -785,6 +867,9 @@
     $('companyName').textContent = cfg.companyName || 'Minha Empresa';
     applyLogo(cfg.logoDataUrl);
     applyTheme(cfg.theme);
+    metaConfig.metaCrescimentoPct = cfg.metaCrescimentoPct != null ? cfg.metaCrescimentoPct : 10;
+    metaConfig.metaFixaSaidas = cfg.metaFixaSaidas || '';
+    if (state.data.saidas.length) renderChartWidget('saidas'); 
   });
   window.api.getAppVersion().then((v) => { $('appVersion').textContent = 'v' + v; });
   window.api.getDashboardData().then((data) => { if (data) applyData(data); });
@@ -840,6 +925,8 @@
       $('cfgFtlentr').value = cfg.paths.ftlentr || '';
       $('cfgFtnope').value = cfg.paths.ftnope || '';
       $('cfgRefreshMinutes').value = cfg.refreshMinutes || 5;
+      $('cfgMetaCrescimentoPct').value = cfg.metaCrescimentoPct != null ? cfg.metaCrescimentoPct : 10;
+      $('cfgMetaFixaSaidas').value = cfg.metaFixaSaidas || '';
       $('settingsOverlay').style.display = 'flex';
     });
   }
@@ -897,6 +984,8 @@
         ftnope: $('cfgFtnope').value.trim(),
       },
       refreshMinutes: Math.max(1, Number($('cfgRefreshMinutes').value) || 5),
+      metaCrescimentoPct: Math.max(0, Number($('cfgMetaCrescimentoPct').value) || 0),
+      metaFixaSaidas: $('cfgMetaFixaSaidas').value.trim(),
     };
     window.api.saveConfig(newConfig).then((cfg) => {
       $('companyName').textContent = cfg.companyName;
@@ -907,6 +996,9 @@
       setStatus('scanning', 'atualizando…');
       window.api.refreshNow();
       loadMargemData();
+      metaConfig.metaCrescimentoPct = cfg.metaCrescimentoPct != null ? cfg.metaCrescimentoPct : 10;
+      metaConfig.metaFixaSaidas = cfg.metaFixaSaidas || '';
+      renderChartWidget('saidas');
     });
   });
 })();

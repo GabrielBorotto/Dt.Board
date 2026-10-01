@@ -19,6 +19,8 @@ const DEFAULT_CONFIG = {
     ftnope: '',
   },
   refreshMinutes: 5,
+  metaCrescimentoPct: 10,
+  metaFixaSaidas: '',
 };
 
 function configFilePath(userDataDir) {

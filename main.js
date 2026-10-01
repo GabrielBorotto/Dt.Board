@@ -3,6 +3,7 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { Worker } = require('worker_threads');
+const { autoUpdater } = require('electron-updater');
 const { loadConfig, saveConfig } = require('./src/config-store');
 
 let mainWindow;
@@ -25,7 +26,7 @@ function logErrorToFile(err) {
 process.on('uncaughtException', (err) => {
   const logPath = logErrorToFile(err);
   try {
-    dialog.showErrorBox('Painel Fiscal - erro inesperado',
+    dialog.showErrorBox('Dt.Board - erro inesperado',
       String(err && err.message ? err.message : err) + (logPath ? ('\n\nDetalhes salvos em:\n' + logPath) : ''));
   } catch (e) { /* nada mais a fazer */ }
 });
@@ -91,6 +92,26 @@ function scheduleRefresh() {
   refreshTimer = setInterval(runScan, minutes * 60 * 1000);
 }
 
+// ---------- Atualizacao automatica (verifica o GitHub Releases do projeto) ----------
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = true; // baixa sozinho assim que encontra uma versao nova
+  autoUpdater.autoInstallOnAppQuit = true; // instala na proxima vez que o usuario fechar o app, sem precisar clicar em nada
+
+  autoUpdater.on('update-available', (info) => {
+    if (mainWindow) mainWindow.webContents.send('update-available', info.version);
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    if (mainWindow) mainWindow.webContents.send('update-downloaded', info.version);
+  });
+
+  autoUpdater.on('error', (err) => {
+    // erro ao verificar atualizacao nao deve incomodar o usuario com uma caixa de dialogo -
+    // o app continua funcionando normal com a versao instalada. So registra no log.
+    logErrorToFile(err);
+  });
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1600,
@@ -112,12 +133,15 @@ app.whenReady().then(() => {
   scheduleRefresh();
   runScan(); // varredura inicial em segundo plano (a tela ja abre com o cache, se existir)
 
+  setupAutoUpdater();
+  autoUpdater.checkForUpdates().catch((err) => logErrorToFile(err));
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 }).catch((err) => {
   logErrorToFile(err);
-  try { dialog.showErrorBox('Painel Fiscal - falha ao iniciar', String(err && err.message ? err.message : err)); } catch (e) { /* nada mais a fazer */ }
+  try { dialog.showErrorBox('Dt.Board - falha ao iniciar', String(err && err.message ? err.message : err)); } catch (e) { /* nada mais a fazer */ }
 });
 
 app.on('window-all-closed', () => {
@@ -152,4 +176,8 @@ ipcMain.handle('get-margem-data', (event, { from, to }) => {
 ipcMain.handle('refresh-now', () => {
   runScan();
   return true;
+});
+
+ipcMain.handle('install-update-now', () => {
+  autoUpdater.quitAndInstall();
 });

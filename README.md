@@ -1,4 +1,4 @@
-# Painel Fiscal
+# Dt.Board
 
 Aplicativo Windows instalável que lê direto dos arquivos `.dbf` do sistema FAT
 (`ftnota.dbf`, `ftentr.dbf`, `ftcrec.dbf`, `ftcpag.dbf`) e mostra:

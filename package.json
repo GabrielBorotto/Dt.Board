@@ -1,7 +1,7 @@
 {
-  "name": "Painel-Fiscal",
-  "version": "1.1.2",
-  "description": "Painel fiscal (saidas, entradas, contas a receber/pagar) lendo direto dos arquivos .dbf do sistema FAT",
+  "name": "dt-board",
+  "version": "1.1.5",
+  "description": "Dt.Board - Painel fiscal (saidas, entradas, contas a receber/pagar) lendo direto dos arquivos .dbf do sistema FAT",
   "main": "main.js",
   "author": "",
   "license": "UNLICENSED",
@@ -9,7 +9,10 @@
   "scripts": {
     "start": "electron .",
     "test": "node test/logic.test.js",
-    "dist": "electron-builder --win"
+    "dist": "electron-builder --win --publish always"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
   },
   "devDependencies": {
     "chart.js": "^4.5.1",
@@ -18,7 +21,14 @@
   },
   "build": {
     "appId": "com.suaempresa.painelfiscal",
-    "productName": "Painel Fiscal",
+    "productName": "Dt.Board",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "GabrielBorotto",
+        "repo": "Dt.Board"
+      }
+    ],
     "win": {
       "target": "nsis"
     },

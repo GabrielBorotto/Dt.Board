@@ -22,7 +22,7 @@ const { loadConfig } = require('../src/config-store');
 
 // --- acha o config.json (mesma logica de sempre) ---
 const roaming = path.join(os.homedir(), 'AppData', 'Roaming');
-const candidatos = ['painel-fiscal', 'Painel Fiscal', 'Painel-Fiscal'];
+const candidatos = ['painel-fiscal', 'Painel Fiscal', 'Painel-Fiscal', 'dt-board', 'Dt.Board', 'dt.board'];
 let userDataDir = null;
 for (const nome of candidatos) {
   const tentativa = path.join(roaming, nome);

@@ -51,7 +51,7 @@ function writeDbf(filePath, fields, records) {
 function close(a, b, eps) { return Math.abs(a - b) < (eps || 0.01); }
 
 function run() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'painel-fiscal-test-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dt-board-test-'));
 
   // ---- FTNOTA: valores por dia, com notas invalidas (NSITPED != "1") que devem ser excluídas ----
   const fieldsNota = [

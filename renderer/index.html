@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Painel Fiscal</title>
+<title>Dt.Board</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,7 +13,7 @@
         <img class="company-logo" id="companyLogo" style="display:none;" alt="Logo da empresa">
         <div>
           <div class="brand-name" id="companyName">Minha Empresa</div>
-          <div class="brand-sub">Painel Fiscal</div>
+          <div class="brand-sub">Dt.Board</div>
         </div>
       </div>
       <div class="header-right">
@@ -26,6 +26,9 @@
         <button class="icon-btn" id="copyLayoutBtn" title="Copiar layout atual (para usar como padrão no código)" aria-label="Copiar layout atual" style="display:none;">&#128203;</button>
         <button class="icon-btn" id="resetLayoutBtn" title="Restaurar layout padrão" aria-label="Restaurar layout padrão">&#8634;</button>
         <button class="icon-btn" id="settingsBtn" title="Configurações">&#9881;</button>
+        <button class="update-badge" id="updateBadge" style="display:none;" type="button">
+          <span id="updateBadgeText">Atualização disponível</span>
+        </button>
         <div class="clock">
           <div id="clockTime">--:--:--</div>
           <div id="clockDate">--</div>
@@ -41,7 +44,14 @@
         <div class="panel-head">
           <div class="panel-title-row">
             <div class="panel-title">Saídas (vendas) — <span id="saidasPeriodLabel">últimos 12 meses</span></div>
-            <div class="period-total" id="saidasTotal">Total: R$ 0</div>
+            <div class="saidas-totais">
+              <div class="period-total" id="saidasTotal">Total: R$ 0</div>
+              <div class="meta-linha" id="saidasMetaLinha">
+                <span class="meta-label">Meta: <b id="saidasMetaValor">R$ 0</b></span>
+                <span class="meta-pct" id="saidasMetaPct">0%</span>
+              </div>
+              <div class="progresso-barra"><div class="progresso-fill" id="saidasProgressoFill" style="width:0%;"></div></div>
+            </div>
           </div>
           <div class="period-controls">
             <div class="period-tabs" data-target="saidas">
@@ -263,6 +273,12 @@
       </label>
       <label>Atualizar automaticamente a cada (minutos)
         <input type="number" id="cfgRefreshMinutes" min="1" step="1">
+      </label>
+      <label>Meta de crescimento sobre o ano passado (%)
+        <input type="number" id="cfgMetaCrescimentoPct" min="0" step="1" placeholder="10">
+      </label>
+      <label>Meta fixa de faturamento do mês - R$ (opcional, deixe vazio para usar o cálculo automático)
+        <input type="number" id="cfgMetaFixaSaidas" min="0" step="0.01" placeholder="Ex: 5.092.318,98">
       </label>
       <div class="modal-actions">
         <button class="btn-secondary" id="cfgCancel">Cancelar</button>

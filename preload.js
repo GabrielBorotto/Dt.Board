@@ -11,4 +11,7 @@ contextBridge.exposeInMainWorld('api', {
   onDashboardUpdated: (cb) => ipcRenderer.on('dashboard-updated', (_event, data) => cb(data)),
   onDashboardScanning: (cb) => ipcRenderer.on('dashboard-scanning', (_event, isScanning) => cb(isScanning)),
   onDashboardError: (cb) => ipcRenderer.on('dashboard-error', (_event, msg) => cb(msg)),
+  installUpdateNow: () => ipcRenderer.invoke('install-update-now'),
+  onUpdateAvailable: (cb) => ipcRenderer.on('update-available', (_event, version) => cb(version)),
+  onUpdateDownloaded: (cb) => ipcRenderer.on('update-downloaded', (_event, version) => cb(version)),
 });
