@@ -6,10 +6,12 @@
 //    Rascunhos (Draft) e pré-lançamentos (Pre-release) não aparecem pros clientes.
 // 2. Se for mais nova que a atual, avisa a tela (o aviso pulsante do cabeçalho).
 // 3. Ao clicar no aviso: baixa o zip, extrai numa pasta temporária e confere se está inteiro.
-// 4. Cria um script .cmd que espera o app fechar, copia os arquivos novos por cima da pasta
-//    do app (robocopy, que tenta de novo se algum arquivo estiver preso) e abre o app de novo.
+// 4. Dispara um "ajudante": o Dt.Board.exe da versão NOVA rodando como Node (sem janela).
+//    Ele espera o app atual fechar, copia os arquivos novos por cima da pasta do app (tentando
+//    de novo se o antivírus estiver segurando algum arquivo) e abre o app de novo.
+//    (Não usa cmd/prompt: no Windows 11 isso abria janelas do Terminal e travava.)
 // 5. Qualquer falha: o app continua na versão atual e o download abre no navegador.
-// Só usa o que já vem no Windows 10/11 (tar.exe, robocopy, cmd). Nada é instalado.
+// Só usa o que já vem no Windows 10/11 (tar.exe) e o próprio app. Nada é instalado.
 //
 // TESTE antes de liberar pros clientes: publique a versão no GitHub marcada como
 // "Pre-release" e abra uma cópia antiga do app com a variável DTB_ATUALIZACAO_TESTE=1.
@@ -72,8 +74,9 @@ function enviar(canal, valor) {
   if (janela && !janela.isDestroyed()) janela.webContents.send(canal, valor);
 }
 
+// %LOCALAPPDATA%\Dt.Board-atualizacao: fica no PC (não vai pro OneDrive nem pro perfil móvel)
 function pastaTrabalho() {
-  return path.join(app.getPath('temp'), 'dtboard-atualizacao');
+  return path.join(process.env.LOCALAPPDATA || app.getPath('temp'), 'Dt.Board-atualizacao');
 }
 
 function modoTeste() {
@@ -169,42 +172,78 @@ function extrair(arquivoZip, destino) {
 
 // ---------- Troca dos arquivos (depois que o app fecha) ----------
 
-// Só texto simples (ASCII). Os caminhos chegam por variáveis de ambiente, assim acentos e
-// espaços nos nomes de pasta não quebram o script.
-const SCRIPT_APLICAR = [
-  '@echo off',
-  'rem Gerado pelo Dt.Board: espera o app fechar, copia a versao nova e abre o app de novo.',
-  'setlocal',
-  'set /a TENTATIVAS=0',
-  ':espera',
-  'tasklist /FI "PID eq %DTB_PID%" /NH 2>nul | find "%DTB_PID%" >nul',
-  'if errorlevel 1 goto copiar',
-  'set /a TENTATIVAS+=1',
-  'if %TENTATIVAS% GEQ 120 goto desistir',
-  'ping -n 2 127.0.0.1 >nul',
-  'goto espera',
-  ':copiar',
-  'ping -n 3 127.0.0.1 >nul',
-  'echo [%date% %time%] copiando a versao %DTB_VERSAO% >> "%DTB_LOG%"',
-  'robocopy "%DTB_ORIGEM%" "%DTB_DESTINO%" /E /R:30 /W:1 /NP /NJH /NJS /NDL /NFL >> "%DTB_LOG%" 2>&1',
-  'echo [%date% %time%] robocopy terminou com codigo %ERRORLEVEL% (de 0 a 7 = ok) >> "%DTB_LOG%"',
-  'start "" "%DTB_EXE%"',
-  'exit /b 0',
-  ':desistir',
-  'echo [%date% %time%] o app nao fechou em 2 minutos; atualizacao cancelada >> "%DTB_LOG%"',
-  'exit /b 1',
-].join('\r\n') + '\r\n';
+// Roda dentro do Dt.Board.exe NOVO (da pasta extraída) com ELECTRON_RUN_AS_NODE=1, ou seja,
+// como Node puro: sem janela, sem cmd e sem prompt. Os caminhos chegam por variáveis de ambiente.
+const SCRIPT_APLICAR = `'use strict';
+process.noAsar = true; // app.asar é copiado como arquivo comum
+let fs;
+try { fs = require('original-fs'); } catch (e) { fs = require('fs'); }
+const path = require('path');
+const { spawn } = require('child_process');
+const E = process.env;
+const pid = Number(E.DTB_PID);
+const origem = E.DTB_ORIGEM;
+const destino = E.DTB_DESTINO;
+
+function registrar(msg) {
+  try { fs.appendFileSync(E.DTB_LOG, '[' + new Date().toISOString() + '] ' + msg + '\\n'); } catch (e) { /* sem log */ }
+}
+const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
+function vivo(p) {
+  try { process.kill(p, 0); return true; } catch (e) { return e.code === 'EPERM'; }
+}
+function listar(pasta, base, lista) {
+  for (const d of fs.readdirSync(pasta, { withFileTypes: true })) {
+    const p = path.join(pasta, d.name);
+    if (d.isDirectory()) listar(p, base, lista); else lista.push(path.relative(base, p));
+  }
+  return lista;
+}
+async function copiar(rel) {
+  const de = path.join(origem, rel);
+  const para = path.join(destino, rel);
+  fs.mkdirSync(path.dirname(para), { recursive: true });
+  for (let tentativa = 1; ; tentativa++) {
+    try { fs.copyFileSync(de, para); return true; } catch (e) {
+      if (tentativa >= 30) { registrar('falhou ao copiar ' + rel + ': ' + e.message); return false; }
+      await dormir(1000); // arquivo preso (antivírus ou processo terminando): tenta de novo
+    }
+  }
+}
+function reabrir() {
+  const env = Object.assign({}, process.env);
+  delete env.ELECTRON_RUN_AS_NODE; // senão o app abriria como Node e fecharia na hora
+  for (const k of Object.keys(env)) if (k.indexOf('DTB_') === 0 && k !== 'DTB_ATUALIZACAO_TESTE') delete env[k];
+  spawn(E.DTB_EXE, [], { detached: true, stdio: 'ignore', cwd: destino, env }).unref();
+}
+
+(async () => {
+  registrar('versao ' + E.DTB_VERSAO + ': esperando o app fechar');
+  for (let i = 0; i < 120 && vivo(pid); i++) await dormir(1000);
+  if (vivo(pid)) { registrar('o app nao fechou em 2 minutos; atualizacao cancelada'); return; }
+  await dormir(1500); // os outros processos do Electron terminam logo depois do principal
+  const arquivos = listar(origem, origem, []);
+  let falhas = 0;
+  for (const rel of arquivos) if (!(await copiar(rel))) falhas++;
+  registrar('copiados ' + (arquivos.length - falhas) + ' de ' + arquivos.length + ' arquivos');
+  reabrir();
+  registrar('app reaberto');
+})().catch((e) => { registrar('erro: ' + (e && e.stack ? e.stack : e)); try { reabrir(); } catch (x) { /* nada */ } });
+`;
 
 function iniciarCopiaAoFechar(raiz, versao) {
   return new Promise((resolve, reject) => {
-    const script = path.join(pastaTrabalho(), 'aplicar-atualizacao.cmd');
-    ofs.writeFileSync(script, SCRIPT_APLICAR, 'ascii');
-    const processo = spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', '""' + script + '""'], {
+    const script = path.join(pastaTrabalho(), 'aplicar-atualizacao.js');
+    ofs.writeFileSync(script, SCRIPT_APLICAR, 'utf8');
+    // o ajudante é o Dt.Board.exe da versão nova (o da pasta do app vai ser substituído)
+    const ajudante = path.join(raiz, path.basename(process.execPath));
+    const processo = spawn(ajudante, [script], {
       detached: true,
       stdio: 'ignore',
       windowsHide: true,
-      windowsVerbatimArguments: true,
+      cwd: raiz,
       env: Object.assign({}, process.env, {
+        ELECTRON_RUN_AS_NODE: '1',
         DTB_PID: String(process.pid),
         DTB_ORIGEM: raiz,
         DTB_DESTINO: path.dirname(process.execPath),
