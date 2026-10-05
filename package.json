@@ -1,6 +1,6 @@
 {
   "name": "dt-board",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "Dt.Board - Painel fiscal (saidas, entradas, contas a receber/pagar) lendo direto dos arquivos .dbf do sistema FAT",
   "main": "main.js",
   "author": "",
@@ -9,7 +9,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node test/logic.test.js",
-    "dist": "electron-builder --win --publish always"
+    "dist": "electron-builder --win --publish never"
   },
   "dependencies": {
     "electron-updater": "^6.3.9"
@@ -30,7 +30,7 @@
       }
     ],
     "win": {
-      "target": "nsis"
+      "target": "zip"
     },
     "nsis": {
       "oneClick": false,

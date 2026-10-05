@@ -45,10 +45,12 @@
           <div class="panel-title-row">
             <div class="panel-title">Saídas (vendas) — <span id="saidasPeriodLabel">últimos 12 meses</span></div>
             <div class="saidas-totais">
-              <div class="period-total" id="saidasTotal">Total: R$ 0</div>
-              <div class="meta-linha" id="saidasMetaLinha">
-                <span class="meta-label">Meta: <b id="saidasMetaValor">R$ 0</b></span>
-                <span class="meta-pct" id="saidasMetaPct">0%</span>
+              <div class="saidas-linha">
+                <div class="period-total" id="saidasTotal">Total: R$ 0</div>
+                <div class="meta-linha" id="saidasMetaLinha">
+                  <span class="meta-label">Meta: <b id="saidasMetaValor">R$ 0</b></span>
+                  <span class="meta-pct" id="saidasMetaPct">0%</span>
+                </div>
               </div>
               <div class="progresso-barra"><div class="progresso-fill" id="saidasProgressoFill" style="width:0%;"></div></div>
             </div>
@@ -137,6 +139,7 @@
             <tbody id="margemBody">
               <tr><td colspan="7" class="margem-loading">Carregando…</td></tr>
             </tbody>
+            <tfoot id="margemFoot"></tfoot>
           </table>
         </div>
         <span class="drag-handle" title="Mover">⠿</span>

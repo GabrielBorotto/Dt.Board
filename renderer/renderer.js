@@ -17,6 +17,11 @@
     return 'R$ ' + n.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
   }
 
+  // 2 casas em milhões (usado na legenda do gráfico de Saídas): R$ 4,53 mi
+  function fmtMi(n) {
+    return 'R$ ' + ((Number(n) || 0) / 1e6).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' mi';
+  }
+
   function daysInMonth(year, monthIdx0) { return new Date(year, monthIdx0 + 1, 0).getDate(); }
   function toDateInputValue(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function parseISODate(s) { const p = s.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); }
@@ -207,6 +212,71 @@
     return seriesFor12Meses(dailyArr);
   }
 
+  // ---------- Saídas: séries ACUMULADAS (Este mês, Mês passado e Intervalo) ----------
+  // Primeiro e ÚLTIMO dia do período (o mês vai até o fim, não só até hoje).
+  function periodoAcumulado(period, from, to) {
+    const now = new Date();
+    if (period === 'thisMonth') {
+      return { fromISO: toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1)), toISO: toDateInputValue(new Date(now.getFullYear(), now.getMonth() + 1, 0)) };
+    }
+    if (period === 'lastMonth') {
+      return { fromISO: toDateInputValue(new Date(now.getFullYear(), now.getMonth() - 1, 1)), toISO: toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 0)) };
+    }
+    return { fromISO: from, toISO: to };
+  }
+
+  // Séries ACUMULADAS dia a dia de um período (Este mês, Mês passado ou Intervalo).
+  //  dailyArr : [{date:'YYYY-MM-DD', fat}, ...]  (histórico diário de Saídas)
+  //  fromStr/toStr : primeiro e último dia do período ('YYYY-MM-DD')
+  //  metaTotal: meta do período inteiro (R$) - a linha da meta sobe em reta até esse valor
+  //  hoje     : Date (passado como parâmetro pra poder testar)
+  function seriesAcumuladas(dailyArr, fromStr, toStr, metaTotal, hoje) {
+    const vazio = { labels: [], atual: [], meta: [], anoPassado: [], projecao: [], total: 0, projecaoFinal: null, anoPassadoFinal: 0, dias: 0, decorridos: 0 };
+    if (!fromStr || !toStr) return vazio; // intervalo ainda sem as duas datas
+    const from = parseISODate(fromStr), to = parseISODate(toStr);
+    if (!from || !to || isNaN(from) || isNaN(to) || from > to) return vazio;
+
+    const byDay = {};
+    dailyArr.forEach((r) => { byDay[r.date] = r.fat; });
+    const hojeStr = toDateInputValue(hoje);
+
+    // lista os dias do período (todos os dias do calendário, sem esconder fim de semana)
+    const dias = [];
+    for (let d = new Date(from); d <= to; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) dias.push(new Date(d));
+    const N = dias.length;
+
+    const labels = [], atual = [], anoPassado = [], meta = [];
+    let somaAtual = 0, somaAnoPassado = 0, decorridos = 0;
+    dias.forEach((d, i) => {
+      const key = toDateInputValue(d);
+      labels.push(String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0'));
+
+      // linha do faturamento: só até hoje (depois disso fica sem ponto)
+      if (key <= hojeStr) { somaAtual += byDay[key] || 0; atual.push(somaAtual); decorridos++; } else { atual.push(null); }
+
+      // mesmo dia, um ano antes (29/02 sem equivalente no ano passado = 0, pra não contar 01/03 duas vezes)
+      const ly = new Date(d.getFullYear() - 1, d.getMonth(), d.getDate());
+      if (ly.getMonth() === d.getMonth()) somaAnoPassado += byDay[toDateInputValue(ly)] || 0;
+      anoPassado.push(somaAnoPassado);
+
+      // meta: reta do zero até a meta total no último dia
+      meta.push(metaTotal * (i + 1) / N);
+    });
+
+    // projeção: média diária até hoje x total de dias do período. Parte do ponto de hoje e segue
+    // com a inclinação da média (termina exatamente em média x N). Só existe se o período ainda não acabou.
+    const projecao = new Array(N).fill(null);
+    let projecaoFinal = null;
+    if (decorridos >= 1 && decorridos < N) {
+      const acumHoje = atual[decorridos - 1];
+      const media = acumHoje / decorridos;
+      for (let i = decorridos - 1; i < N; i++) projecao[i] = acumHoje + media * (i - (decorridos - 1));
+      projecaoFinal = projecao[N - 1];
+    }
+
+    return { labels, atual, meta, anoPassado, projecao, total: somaAtual, projecaoFinal, anoPassadoFinal: somaAnoPassado, dias: N, decorridos };
+  }
+
   // ---------- Estado ----------
   const state = {
     data: { saidas: [], entradas: [], receber: { ate30: 0, mais30: 0 }, pagar: { ate30: 0, mais30: 0 } },
@@ -234,6 +304,8 @@
       muted: cs.getPropertyValue('--muted').trim() || '#8b95a8',
       line: cs.getPropertyValue('--line').trim() || '#232c3d',
       compare: cs.getPropertyValue('--compare').trim() || '#7fc4c9',
+      green: cs.getPropertyValue('--green').trim() || '#3ecf8e',
+      text: cs.getPropertyValue('--text').trim() || '#eef2f8',
     };
   }
 
@@ -305,9 +377,76 @@
         },
       },
     });
+    charts[canvasId]._modo = 'diario';
     return charts[canvasId];
   }
-  
+
+  // Gráfico de Saídas no modo ACUMULADO: 4 linhas (Faturado, Meta, Ano passado, Projeção).
+  // Se o gráfico existente estiver no outro modo (diário/12 meses), ele é destruído e recriado.
+  function ensureChartAcumulado(canvasId) {
+    const existente = charts[canvasId];
+    if (existente && existente._modo === 'acumulado') return existente;
+    if (existente) { existente.destroy(); delete charts[canvasId]; }
+    const ctx = $(canvasId).getContext('2d');
+    const c = themeColors();
+    const comum = { tension: 0, pointRadius: 0, pointHoverRadius: 5, pointHitRadius: 12, spanGaps: false };
+    charts[canvasId] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          Object.assign({
+            label: 'Faturado', data: [], borderColor: c.gold, borderWidth: 2.6, fill: true, _final: null,
+            backgroundColor: (cx) => {
+              const a = cx.chart.chartArea;
+              if (!a) return null;
+              const g = cx.chart.ctx.createLinearGradient(0, a.top, 0, a.bottom);
+              g.addColorStop(0, hexToRgba(c.gold, 0.30));
+              g.addColorStop(1, hexToRgba(c.gold, 0.02));
+              return g;
+            },
+          }, comum),
+          Object.assign({ label: 'Meta', data: [], borderColor: c.green, borderWidth: 1.8, borderDash: [7, 5], fill: false, _final: null }, comum),
+          Object.assign({ label: 'Ano passado', data: [], borderColor: c.compare, borderWidth: 1.8, fill: false, _final: null }, comum),
+          Object.assign({ label: 'Projeção', data: [], borderColor: c.gold, borderWidth: 2.4, borderDash: [2, 5], borderCapStyle: 'round', fill: false, _final: null }, comum),
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            display: true, position: 'top', align: 'start',
+            labels: {
+              color: c.muted, usePointStyle: true, pointStyle: 'line', boxWidth: 30, font: { size: 12 }, padding: 16,
+              // linha sem dados (ex.: Projeção no mês fechado) some da legenda
+              filter: (item, data) => data.datasets[item.datasetIndex].data.length > 0,
+              generateLabels: (chart) => Chart.defaults.plugins.legend.labels.generateLabels(chart).map((item) => {
+                const ds = chart.data.datasets[item.datasetIndex];
+                if (ds._final != null) item.text = ds.label + '  ' + fmtMi(ds._final);
+                item.fontColor = c.text;
+                return item;
+              }),
+            },
+          },
+          tooltip: {
+            // no dia de hoje a projeção repete o valor do faturado, então não aparece duas vezes
+            filter: (it) => !(it.datasetIndex === 3 && it.dataIndex === it.chart._idxHoje),
+            callbacks: { label: (cx) => ' ' + cx.dataset.label + ': ' + fmtFull(cx.parsed.y) },
+          },
+        },
+        scales: {
+          x: { ticks: { color: c.muted, font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 16 }, grid: { color: c.line } },
+          y: { beginAtZero: true, grace: '4%', ticks: { color: c.muted, font: { size: 10 }, callback: (v) => fmtCompact(v) }, grid: { color: c.line } },
+        },
+      },
+    });
+    charts[canvasId]._modo = 'acumulado';
+    return charts[canvasId];
+  }
+
   function hexToRgba(hex, alpha) {
     const h = hex.replace('#', '');
     const bigint = parseInt(h.length === 3 ? h.split('').map((ch) => ch + ch).join('') : h, 16);
@@ -328,6 +467,11 @@
 
     function renderChartWidget(target) {
     const w = state.widgets[target];
+    // Saídas fora da aba "12 meses" usa o gráfico acumulado de 4 linhas
+    if (target === 'saidas' && w.period !== '12m') { renderSaidasAcumulado(w); return; }
+    // voltando do modo acumulado (ex.: clicou em "12 meses"): destrói pra recriar no modo diário
+    const emOutroModo = charts[target + 'Chart'];
+    if (emOutroModo && emOutroModo._modo === 'acumulado') { emOutroModo.destroy(); delete charts[target + 'Chart']; }
     const s = computeSeries(state.data[target], w.period, w.from, w.to);
     const chart = ensureChart(target + 'Chart');
     chart.data.labels = s.labels;
@@ -349,15 +493,37 @@
   // Calcula e desenha a meta de faturamento das Saidas. Usa o valor fixo das Configuracoes
   // quando preenchido (e a aba for "Este mes"); caso contrario, calcula automaticamente como
   // o mesmo periodo do ano passado + a % de crescimento configurada.
-  function renderMetaSaidas(totalAtual, period, from, to) {
+  function calcularMetaSaidas(period, from, to) {
     const usaFixa = period === 'thisMonth' && metaConfig.metaFixaSaidas !== '' && !isNaN(Number(metaConfig.metaFixaSaidas));
-    let meta;
-    if (usaFixa) {
-      meta = Number(metaConfig.metaFixaSaidas);
-    } else {
-      const anoPassado = totalAnoPassado(state.data.saidas, period, from, to);
-      meta = anoPassado * (1 + (Number(metaConfig.metaCrescimentoPct) || 0) / 100);
-    }
+    if (usaFixa) return Number(metaConfig.metaFixaSaidas);
+    const anoPassado = totalAnoPassado(state.data.saidas, period, from, to);
+    return anoPassado * (1 + (Number(metaConfig.metaCrescimentoPct) || 0) / 100);
+  }
+
+  // Desenha o gráfico acumulado de Saídas (Este mês, Mês passado e Intervalo).
+  function renderSaidasAcumulado(w) {
+    const { fromISO, toISO } = periodoAcumulado(w.period, w.from, w.to);
+    const meta = calcularMetaSaidas(w.period, w.from, w.to);
+    const s = seriesAcumuladas(state.data.saidas, fromISO, toISO, meta, new Date());
+    const chart = ensureChartAcumulado('saidasChart');
+    chart.data.labels = s.labels;
+    const ds = chart.data.datasets;
+    ds[0].data = s.atual;      ds[0]._final = s.total;
+    ds[1].data = s.meta;       ds[1]._final = meta;
+    ds[2].data = s.anoPassado; ds[2]._final = s.anoPassadoFinal;
+    ds[3].data = s.projecaoFinal == null ? [] : s.projecao; ds[3]._final = s.projecaoFinal;
+    chart._idxHoje = s.decorridos - 1;
+    chart.update();
+
+    $('saidasPeriodLabel').textContent = w.period === 'thisMonth' ? 'este mês (acumulado)'
+      : w.period === 'lastMonth' ? 'mês passado (acumulado)'
+      : periodLabel(w.period, w.from, w.to);
+    $('saidasTotal').textContent = 'Total: ' + fmtFull(s.total);
+    renderMetaSaidas(s.total, w.period, w.from, w.to);
+  }
+
+  function renderMetaSaidas(totalAtual, period, from, to) {
+    const meta = calcularMetaSaidas(period, from, to);
 
     const pct = meta > 0 ? (totalAtual / meta * 100) : null;
     $('saidasMetaValor').textContent = fmtFull(meta);
@@ -485,7 +651,30 @@
     };
   }
 
+  function renderMargemTotal(grupos) {
+    const foot = $('margemFoot');
+    if (!grupos || grupos.length === 0) { foot.innerHTML = ''; return; }
+    const t = {qtd: 0, valorFinal: 0, custo: 0, margem: 0 };
+    grupos.forEach((g) => {
+      t.qtd += Number(g.qtd) || 0;
+      t.valorFinal += Number(g.valorFinal) || 0;
+      t.custo += Number(g.custo) || 0;
+      t.margem += Number(g.margem) ||0;
+    });
+    const cor = t.margem < 0 ? 'negative' : 'positive';
+    foot.innerHTML = '<tr class="margem-row-total">' +
+      '<td></td>' +
+      '<td>Total</td>' +
+      '<td class="num">' + fmtQtd(t.qtd) + '</td>' +
+      '<td class="num">' + fmtFull(t.valorFinal) + '</td>' +
+      '<td class="num">' + fmtFull(t.custo) + '</td>' +
+      '<td class="num ' + cor + '">' + fmtFull(t.margem) + '</td>' +
+      '<td class="num ' + cor + '">' + fmtPct(t.margem, t.valorFinal) + '</td>' +
+      '</tr>';
+  }
+
   function renderMargemTable() {
+    renderMargemTotal(margemData);
     const tbody = $('margemBody');
     if (!margemData || margemData.length === 0) {
       tbody.innerHTML = '<tr><td colspan="7" class="margem-loading">Nenhuma venda no período selecionado.</td></tr>';
@@ -543,10 +732,12 @@
     $('margemPeriodLabel').textContent = margemPeriodLabel(w.period, w.from, w.to);
     if (w.period === 'range' && (!w.from || !w.to)) return;
     $('margemBody').innerHTML = '<tr><td colspan="7" class="margem-loading">Carregando…</td></tr>';
+    renderMargemTotal([]);
     window.api.getMargemData(fromISO, toISO).then((result) => {
       if (meuId !== margemRequestId) return; // uma chamada mais nova ja foi feita - ignora esta resposta atrasada
       if (result && result.error) {
         $('margemBody').innerHTML = '<tr><td colspan="7" class="margem-loading">' + escapeHtml(result.error) + '</td></tr>';
+        renderMargemTotal([]);
         margemData = [];
         return;
       }
@@ -555,6 +746,7 @@
     }).catch((err) => {
       if (meuId !== margemRequestId) return;
       $('margemBody').innerHTML = '<tr><td colspan="7" class="margem-loading">Erro: ' + escapeHtml(err.message) + '</td></tr>';
+      renderMargemTotal([]);
     });
   }
 
@@ -623,6 +815,77 @@
     state.widgets.impostos.month = $('impostosMonth').value || state.widgets.impostos.month;
     if (state.widgets.impostos.period === 'month') renderImpostosWidget();
   });
+
+  // ---------- Lembrar abas e períodos entre reinícios ----------
+  const CHAVE_WIDGETS = 'dtboard.widgets.v1';
+  const PERIODOS_VALIDOS = {
+    saidas:   ['12m', 'thisMonth', 'lastMonth', 'range'],
+    entradas: ['12m', 'thisMonth', 'lastMonth', 'range'],
+    margem:   ['thisMonth', 'lastMonth', 'range'],
+    impostos: ['year', 'thisMonth', 'lastMonth', 'month'],
+  };
+  const ORDENS_VALIDAS = ['padrao', 'maiorPct', 'menorPct'];
+  const RE_DATA = /^\d{4}-\d{2}-\d{2}$/;
+  const RE_MES = /^\d{4}-\d{2}$/;
+
+  function salvarWidgets() {
+    try {
+      localStorage.setItem(CHAVE_WIDGETS, JSON.stringify(state.widgets));
+    } catch (e) { /* sem permissão ou sem espaço: o app segue sem lembrar */ }
+  }
+
+  function carregarWidgets() {
+    let salvo = null;
+    try {
+      salvo = JSON.parse(localStorage.getItem(CHAVE_WIDGETS));
+    } catch (e) { return; } // JSON quebrado: fica com os padrões
+    if (!salvo || typeof salvo !== 'object') return;
+
+    Object.keys(PERIODOS_VALIDOS).forEach((alvo) => {
+      const s = salvo[alvo];
+      if (!s || typeof s !== 'object') return;
+      const w = state.widgets[alvo];
+      if (PERIODOS_VALIDOS[alvo].includes(s.period)) {
+        w.period = s.period;
+        if (s.period === 'range' && RE_DATA.test(s.from) && RE_DATA.test(s.to)) { w.from = s.from; w.to = s.to; }
+        if (s.period === 'month' && RE_MES.test(s.month)) w.month = s.month;
+      }
+      if (alvo === 'margem' && ORDENS_VALIDAS.includes(s.sort)) w.sort = s.sort;
+    });
+  }
+
+  // Deixa a tela igual ao state: aba ativa, campos De/Até e seletor de mês visíveis.
+  function sincronizarAbasComEstado() {
+    document.querySelectorAll('.period-tabs').forEach((grupo) => {
+      const w = state.widgets[grupo.dataset.target];
+      grupo.querySelectorAll('.period-tab').forEach((b) => b.classList.toggle('active', b.dataset.period === w.period));
+    });
+    document.querySelectorAll('.sort-tabs').forEach((grupo) => {
+      const w = state.widgets[grupo.dataset.target];
+      grupo.querySelectorAll('.sort-tab').forEach((b) => b.classList.toggle('active', b.dataset.sort === w.sort));
+    });
+    ['saidas', 'entradas', 'margem'].forEach((alvo) => {
+      const w = state.widgets[alvo];
+      const emIntervalo = w.period === 'range';
+      $(alvo + 'Range').classList.toggle('visible', emIntervalo);
+      if (emIntervalo) { $(alvo + 'From').value = w.from; $(alvo + 'To').value = w.to; }
+    });
+    const imp = state.widgets.impostos;
+    $('impostosMonthWrap').classList.toggle('visible', imp.period === 'month');
+    if (imp.period === 'month') $('impostosMonth').value = imp.month;
+  }
+
+  carregarWidgets();
+  sincronizarAbasComEstado();
+
+  // Salva depois de qualquer mudança. Estes listeners são registrados DEPOIS dos originais
+  // (acima), então rodam quando o state já foi atualizado.
+  document.querySelectorAll('.period-tab, .sort-tab').forEach((b) => b.addEventListener('click', salvarWidgets));
+  ['saidas', 'entradas', 'margem'].forEach((alvo) => {
+    $(alvo + 'From').addEventListener('change', salvarWidgets);
+    $(alvo + 'To').addEventListener('change', salvarWidgets);
+  });
+  $('impostosMonth').addEventListener('change', salvarWidgets);
 
   // ---------- Layout ajustável (mover e redimensionar widgets) ----------
   const GRID_COLS = 12, GRID_ROWS = 40, GAP = 12, MIN_SPAN = 2;
@@ -827,21 +1090,43 @@
   window.api.onDashboardScanning((isScanning) => { if (isScanning) setStatus('scanning', 'atualizando…'); });
   window.api.onDashboardError((msg) => setStatus('error', 'erro: ' + msg));
 
-  let updateProntoParaInstalar = false;
+  // ---------- Aviso de atualização (versão em ZIP, sem instalador) ----------
+  // nenhuma -> disponivel (clicável) -> baixando (com %) -> aplicando (o app fecha e reabre).
+  // Se der erro, volta pra "disponivel" (dá pra clicar de novo) e o download abre no navegador.
+  let estadoAtualizacao = 'nenhuma';
+  let versaoNova = '';
+
+  function mostrarAvisoAtualizacao(texto) {
+    $('updateBadgeText').textContent = texto;
+    $('updateBadge').style.display = 'flex';
+  }
 
   window.api.onUpdateAvailable((version) => {
-    $('updateBadgeText').textContent = 'Baixando atualização v' + version + '...';
-    $('updateBadge').style.display = 'flex';
+    if (estadoAtualizacao === 'baixando' || estadoAtualizacao === 'aplicando') return;
+    versaoNova = version;
+    estadoAtualizacao = 'disponivel';
+    mostrarAvisoAtualizacao('Nova versão v' + version + ' — clique para atualizar');
+  });
+
+  window.api.onUpdateProgress((pct) => {
+    if (estadoAtualizacao !== 'baixando') return;
+    mostrarAvisoAtualizacao('Baixando v' + versaoNova + '... ' + pct + '%');
   });
 
   window.api.onUpdateDownloaded((version) => {
-    updateProntoParaInstalar = true;
-    $('updateBadgeText').textContent = 'Reiniciar para atualizar (v' + version +')';
-    $('updateBadge').style.display = 'flex';
+    estadoAtualizacao = 'aplicando';
+    mostrarAvisoAtualizacao('Atualizando para v' + version + ' — o app vai reabrir');
+  });
+
+  window.api.onUpdateError((version) => {
+    estadoAtualizacao = 'disponivel';
+    mostrarAvisoAtualizacao('Falha ao atualizar — download da v' + version + ' aberto no navegador');
   });
 
   $('updateBadge').addEventListener('click', () => {
-    if (!updateProntoParaInstalar) return; // ainda baixando, clicar nao faz nada ainda
+    if (estadoAtualizacao !== 'disponivel') return; // baixando ou aplicando: ignora cliques
+    estadoAtualizacao = 'baixando';
+    mostrarAvisoAtualizacao('Baixando v' + versaoNova + '... 0%');
     window.api.installUpdateNow();
   });
 

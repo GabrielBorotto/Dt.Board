@@ -3,7 +3,7 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { Worker } = require('worker_threads');
-const { autoUpdater } = require('electron-updater');
+const atualizador = require('./src/atualizador');
 const { loadConfig, saveConfig } = require('./src/config-store');
 
 let mainWindow;
@@ -92,26 +92,6 @@ function scheduleRefresh() {
   refreshTimer = setInterval(runScan, minutes * 60 * 1000);
 }
 
-// ---------- Atualizacao automatica (verifica o GitHub Releases do projeto) ----------
-function setupAutoUpdater() {
-  autoUpdater.autoDownload = true; // baixa sozinho assim que encontra uma versao nova
-  autoUpdater.autoInstallOnAppQuit = true; // instala na proxima vez que o usuario fechar o app, sem precisar clicar em nada
-
-  autoUpdater.on('update-available', (info) => {
-    if (mainWindow) mainWindow.webContents.send('update-available', info.version);
-  });
-
-  autoUpdater.on('update-downloaded', (info) => {
-    if (mainWindow) mainWindow.webContents.send('update-downloaded', info.version);
-  });
-
-  autoUpdater.on('error', (err) => {
-    // erro ao verificar atualizacao nao deve incomodar o usuario com uma caixa de dialogo -
-    // o app continua funcionando normal com a versao instalada. So registra no log.
-    logErrorToFile(err);
-  });
-}
-
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1600,
@@ -133,9 +113,8 @@ app.whenReady().then(() => {
   scheduleRefresh();
   runScan(); // varredura inicial em segundo plano (a tela ja abre com o cache, se existir)
 
-  setupAutoUpdater();
-  autoUpdater.checkForUpdates().catch((err) => logErrorToFile(err));
-
+  atualizador.iniciar({ janela: () => mainWindow, log: logErrorToFile });
+  
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -178,6 +157,4 @@ ipcMain.handle('refresh-now', () => {
   return true;
 });
 
-ipcMain.handle('install-update-now', () => {
-  autoUpdater.quitAndInstall();
-});
+ipcMain.handle('install-update-now', () => atualizador.aplicar());
