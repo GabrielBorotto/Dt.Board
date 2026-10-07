@@ -153,6 +153,15 @@ body.edit-mode #resetLayoutBtn{display:flex;}
 .margem-table td.positive{color:var(--green);}
 .margem-codigo{color:var(--muted);font-size:.85em;}
 
+/* Busca na tabela de margem */
+.margem-busca{margin-left:auto;}
+.margem-busca input{width:clamp(180px,16vw,260px);background:var(--panel-2);border:1px solid var(--line);color:var(--text);padding:.3em .6em;border-radius:6px;font-family:var(--font-body);font-size:clamp(11px,.78vw,13px);color-scheme:dark;}
+:root[data-theme="light"] .margem-busca input{color-scheme:light;}
+.margem-busca input:focus{outline:none;border-color:var(--gold);}
+.margem-busca input::placeholder{color:var(--muted);}
+.margem-table mark{background:var(--gold-soft);color:var(--text);border-radius:2px;padding:0 1px;}
+.margem-busca-qtd{color:var(--muted);font-weight:400;font-size:.85em;margin-left:.5em;}
+
 .chart-row{flex:1;display:flex;gap:1vw;min-height:0;}
 .chart-body{flex:1;min-width:0;position:relative;}
 .tax-panel{width:190px;flex:0 0 190px;display:flex;flex-direction:column;gap:.5vh;justify-content:center;}

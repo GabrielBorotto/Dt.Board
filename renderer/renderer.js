@@ -651,20 +651,68 @@
     };
   }
 
-  function renderMargemTotal(grupos) {
+  // Busca na tabela de margem ---
+  // "Filé" -> "file": minúscula sem acento, pra buscar não depende disso
+  function normalizarBusca(s) {
+    return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  }
+
+  function palavrasDaBusca(termo) {
+    return normalizarBusca(termo).split(/\s+/).filter(Boolean);
+  }
+
+  // O produto aparece se TODAS as palavras estiverem no nome ou no código, em qualquer ordem.
+  function itemBateBusca(it, palavras) {
+    const alvo = normalizarBusca(it.desc) + ' ' + normalizarBusca(it.codigo);
+    return palavras.every((p) => alvo.includes(p));
+  }
+
+  // Texto pronto pra tela (escapado), com <mark> em volta dos trechos que bateram
+  function destacarBusca(texto, palavras) {
+    const original = String(texto == null ? '' : texto);
+    if (!palavras.length) return escapeHtml(original);
+    let norm = '';
+    const posicaoOriginal = []; // letra do texto normalizado -> letra do texto original
+    for (let i = 0; i < original.length; i++) {
+      const n = normalizarBusca(original[i]);
+      for (let k = 0; k < n.length; k++) { norm += n[k]; posicaoOriginal.push(i); }
+    }
+    const marcado = new Array(original.length).fill(false);
+    palavras.forEach((p) => {
+      let de = norm.indexOf(p);
+      while (de !== -1) {
+        for (let k = de; k < de + p.length; k++) marcado[posicaoOriginal[k]] = true;
+        de = norm.indexOf(p, de + 1);
+      }
+    });
+    let html = '';
+    let aberto = false;
+    for (let i = 0; i < original.length; i++) {
+      if (marcado[i] && !aberto) { html += '<mark>'; aberto = true; }
+      if (!marcado[i] && aberto) { html += '</mark>'; aberto = false; }
+      html += escapeHtml(original[i]);
+    }
+    return html + (aberto ? '</mark>' : '');
+  }
+
+  let margemBusca = '';                     // texto digitado no campo de busca
+  let margemRecolhidosNaBusca = new Set();  // grupos que a pessoa fechou durante a busca
+  let margemBuscaTimer = null;
+
+  function renderMargemTotal(lista, rotulo) {
     const foot = $('margemFoot');
-    if (!grupos || grupos.length === 0) { foot.innerHTML = ''; return; }
-    const t = {qtd: 0, valorFinal: 0, custo: 0, margem: 0 };
-    grupos.forEach((g) => {
+    if (!lista || lista.length === 0) { foot.innerHTML = ''; return; }
+    const t = { qtd: 0, valorFinal: 0, custo: 0, margem: 0 };
+    lista.forEach((g) => {
       t.qtd += Number(g.qtd) || 0;
       t.valorFinal += Number(g.valorFinal) || 0;
       t.custo += Number(g.custo) || 0;
-      t.margem += Number(g.margem) ||0;
+      t.margem += Number(g.margem) || 0;
     });
     const cor = t.margem < 0 ? 'negative' : 'positive';
     foot.innerHTML = '<tr class="margem-row-total">' +
       '<td></td>' +
-      '<td>Total</td>' +
+      '<td>' + escapeHtml(rotulo || 'Total') + '</td>' +
       '<td class="num">' + fmtQtd(t.qtd) + '</td>' +
       '<td class="num">' + fmtFull(t.valorFinal) + '</td>' +
       '<td class="num">' + fmtFull(t.custo) + '</td>' +
@@ -674,22 +722,30 @@
   }
 
   function renderMargemTable() {
-    renderMargemTotal(margemData);
     const tbody = $('margemBody');
     if (!margemData || margemData.length === 0) {
+      renderMargemTotal([]);
       tbody.innerHTML = '<tr><td colspan="7" class="margem-loading">Nenhuma venda no período selecionado.</td></tr>';
       return;
     }
+    const palavras = palavrasDaBusca(margemBusca);
+    const buscando = palavras.length > 0;
     const sortMode = state.widgets.margem.sort || 'padrao';
     const grupos = sortMode === 'padrao' ? margemData : [...margemData].sort(compararPorMargemPct(sortMode));
 
     let html = '';
+    const encontrados = [];
     grupos.forEach((g) => {
-      const expanded = margemExpanded.has(g.codigo);
+      // na busca, o grupo só aparece se algum produto dele bater, e mostra só esses produtos
+      const itensDoGrupo = buscando ? g.itens.filter((it) => itemBateBusca(it, palavras)) : g.itens;
+      if (buscando && itensDoGrupo.length === 0) return;
+      if (buscando) encontrados.push(...itensDoGrupo);
+      const expanded = buscando ? !margemRecolhidosNaBusca.has(g.codigo) : margemExpanded.has(g.codigo);
       const gCor = g.margem < 0 ? 'negative' : 'positive';
       html += '<tr class="margem-row-grupo' + (expanded ? ' expanded' : '') + '" data-grupo="' + escapeHtml(g.codigo) + '">' +
         '<td><span class="margem-arrow">&#9656;</span></td>' +
-        '<td>' + escapeHtml(g.desc) + '</td>' +
+        '<td>' + escapeHtml(g.desc) +
+          (buscando ? '<span class="margem-busca-qtd">' + itensDoGrupo.length + ' de ' + g.itens.length + '</span>' : '') + '</td>' +
         '<td class="num">' + fmtQtd(g.qtd) + '</td>' +
         '<td class="num">' + fmtFull(g.valorFinal) + '</td>' +
         '<td class="num">' + fmtFull(g.custo) + '</td>' +
@@ -697,12 +753,12 @@
         '<td class="num ' + gCor + '">' + fmtPct(g.margem, g.valorFinal) + '</td>' +
         '</tr>';
       if (expanded) {
-        const itens = sortMode === 'padrao' ? g.itens : [...g.itens].sort(compararPorMargemPct(sortMode));
+        const itens = sortMode === 'padrao' ? itensDoGrupo : [...itensDoGrupo].sort(compararPorMargemPct(sortMode));
         itens.forEach((it) => {
           const iCor = it.margem < 0 ? 'negative' : 'positive';
           html += '<tr class="margem-row-item">' +
             '<td></td>' +
-            '<td class="margem-item-nome">' + escapeHtml(it.desc) + ' <span class="margem-codigo">' + escapeHtml(it.codigo) + '</span></td>' +
+            '<td class="margem-item-nome">' + destacarBusca(it.desc, palavras) + ' <span class="margem-codigo">' + destacarBusca(it.codigo, palavras) + '</span></td>' +
             '<td class="num">' + fmtQtd(it.qtd) + '</td>' +
             '<td class="num">' + fmtFull(it.valorFinal) + '</td>' +
             '<td class="num">' + fmtFull(it.custo) + '</td>' +
@@ -712,14 +768,46 @@
         });
       }
     });
+
+    if (buscando && encontrados.length === 0) {
+      renderMargemTotal([]);
+      tbody.innerHTML = '<tr><td colspan="7" class="margem-loading">Nenhum produto encontrado para "' + escapeHtml(margemBusca.trim()) + '".</td></tr>';
+      return;
+    }
+    if (buscando) renderMargemTotal(encontrados, 'Total da busca (' + encontrados.length + (encontrados.length === 1 ? ' produto)' : ' produtos)'));
+    else renderMargemTotal(margemData);
     tbody.innerHTML = html;
 
     tbody.querySelectorAll('.margem-row-grupo').forEach((tr) => {
       tr.addEventListener('click', () => {
         const cod = tr.dataset.grupo;
-        if (margemExpanded.has(cod)) margemExpanded.delete(cod); else margemExpanded.add(cod);
+        // durante a busca os grupos já vêm abertos; o clique fecha/abre sem mexer no estado normal
+        const conjunto = buscando ? margemRecolhidosNaBusca : margemExpanded;
+        if (conjunto.has(cod)) conjunto.delete(cod); else conjunto.add(cod);
         renderMargemTable();
       });
+    });
+  }
+
+  // Campo de busca: espera a pessoa parar de digitar por 150 ms antes de redesenhar.
+  // (O "if" protege o app: se o campo não existir no index.html, a busca só não funciona.)
+  const campoBuscaMargem = $('margemBusca');
+  if (campoBuscaMargem) {
+    campoBuscaMargem.addEventListener('input', () => {
+      clearTimeout(margemBuscaTimer);
+      margemBuscaTimer = setTimeout(() => {
+        margemBusca = campoBuscaMargem.value;
+        margemRecolhidosNaBusca = new Set();
+        renderMargemTable();
+      }, 150);
+    });
+    campoBuscaMargem.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      clearTimeout(margemBuscaTimer);
+      campoBuscaMargem.value = '';
+      margemBusca = '';
+      margemRecolhidosNaBusca = new Set();
+      renderMargemTable();
     });
   }
 
