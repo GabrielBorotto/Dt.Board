@@ -1,6 +1,6 @@
 {
   "name": "dt-board",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "Dt.Board - Painel fiscal (saidas, entradas, contas a receber/pagar) lendo direto dos arquivos .dbf do sistema FAT",
   "main": "main.js",
   "author": "",
