@@ -1,6 +1,9 @@
 'use strict';
 const { parentPort, workerData } = require('worker_threads');
+const fs = require('fs');
+const path = require('path');
 const { lerCfopsValidos, aggregateNotasPorDia, aggregateAgingNaoLiquidado, mergeDailyMaps, combineFatComImpostos } = require('./aggregator');
+const { readHeader, decodeRecord } = require('./dbf-reader');
 
 // CFOPs de compra "de verdade" dentro do ftentr - e o que o relatorio do FAT considera
 // "Faturado" (movimentacoes como retorno de armazenagem e bonificacao recebida ficam de
@@ -17,6 +20,29 @@ function dailyMapToArray(daily) {
     else out.push({ date: k, fat: v.fat, icms: v.icms, pis: v.pis, cofins: v.cofins });
   }
   return out;
+}
+
+function lerNomeEmpresa(caminhoFtnota) {
+  if (!caminhoFtnota) return undefined;
+  const caminho = path.join(path.dirname(caminhoFtnota), 'ftempr.dbf');
+  if (!fs.existsSync(caminho)) return undefined;
+  const fd = fs.openSync(caminho, 'r');
+  try {
+    const meta = readHeader(fd);
+    if (fs.fstatSync(fd).size < meta.headerSize + meta.recordSize) return undefined; //arquivo incompleto
+    const buf = Buffer.alloc(meta.recordSize);
+    for (let i = 0; i < meta.numRecords; i++) {
+      const lidos = fs.readSync(fd, buf, 0, meta.recordSize, meta.headerSize + i * meta.recordSize);
+      if (lidos < meta.recordSize) break;
+      const rec = decodeRecord(meta, buf, ['FANEM', 'NOMEM']);
+      if (rec.__deleted) continue;
+      const nome = rec.FANEM || rec.NOMEM;
+      if (nome) return nome;
+    }
+    return '';
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 function run() {
@@ -135,6 +161,13 @@ function run() {
     result.errors.push('ftcpag: ' + e.message);
     result.pagar = { ate30: 0, mais30: 0 };
   }
+
+  // Nome da empresa (opcional): falha não vira erro vermelho na tela, a tela só
+  // mantém o último nome que já conhecia.
+  try {
+    const nomeEmpresa = lerNomeEmpresa(cfg.paths.ftnota);
+    if (nomeEmpresa !== undefined) result.empresaNome = nomeEmpresa;
+  } catch (e) { /* sem nome do FAT desta vez */ }
 
   parentPort.postMessage(result);
 }

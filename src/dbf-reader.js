@@ -16,10 +16,11 @@ function readHeader(fd) {
   let descOffset = 32;
   let pos = 1; // offset dentro do registro; byte 0 e a flag de exclusao (deletado)
 
-  while (true) {
+  //nunca passa do tamanho do cabeçalho, nem do fim do arquivo.
+  while (descOffset + 32 <= headerSize) {
     const fbuf = Buffer.alloc(32);
-    fs.readSync(fd, fbuf, 0, 32, descOffset);
-    if (fbuf[0] === 0x0d) break; // terminador da lista de campos
+    const lidos = fs.readSync(fd, fbuf, 0, 32, descOffset);
+    if (lidos < 32 || fbuf[0] === 0x0d) break;
 
     let nameEnd = fbuf.indexOf(0);
     if (nameEnd === -1 || nameEnd > 11) nameEnd = 11;

@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const DEFAULT_CONFIG = {
-  companyName: 'Minha Empresa',
+  companyName: '',
   logoDataUrl: '',
   theme: 'dark',
   paths: {

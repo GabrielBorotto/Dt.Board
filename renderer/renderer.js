@@ -979,12 +979,12 @@
   const GRID_COLS = 12, GRID_ROWS = 40, GAP = 12, MIN_SPAN = 2;
 
   const DEFAULT_LAYOUT = {
-    saidas:   { col: 1, colSpan: 12, row: 1,  rowSpan: 8 }, // 1 - prioridade maxima, bem grande
-    margem:   { col: 1, colSpan: 12, row: 9, rowSpan: 9 }, // 2 - tambem grande, mais alta ainda (tabela densa)
-    entradas: { col: 1, colSpan: 8, row: 18, rowSpan: 9 },  // 3
-    impostos: { col: 9, colSpan: 4, row: 18, rowSpan: 5 },  // 4
-    receber:  { col: 9, colSpan: 4,  row: 23, rowSpan: 2 },  // 5 - menor prioridade, embaixo de tudo
-    pagar:    { col: 9, colSpan: 4,  row: 25, rowSpan: 2 },  // 5
+    saidas:   { col: 1, colSpan: 12, row: 1,  rowSpan: 11 }, // 1 - prioridade maxima, bem grande
+    margem:   { col: 1, colSpan: 12, row: 12, rowSpan: 9 }, // 2 - tambem grande, mais alta ainda (tabela densa)
+    entradas: { col: 1, colSpan: 8, row: 21, rowSpan: 9 },  // 3
+    impostos: { col: 9, colSpan: 4, row: 21, rowSpan: 5 },  // 4
+    receber:  { col: 9, colSpan: 4,  row: 26, rowSpan: 2 },  // 5 - menor prioridade, embaixo de tudo
+    pagar:    { col: 9, colSpan: 4,  row: 28, rowSpan: 2 },  // 5
   };
 
   let layout = JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
@@ -1156,8 +1156,28 @@
     $('statusText').textContent = text;
   }
 
+  // ---------- Nome da empresa no cabeçalho ----------
+  // Vale o nome digitado nas Configurações. Vazio (ou o antigo padrão "Minha Empresa") usa o
+  // nome do FAT, que vem da varredura (ftempr.dbf). Sem nenhum dos dois: "Minha Empresa".
+  let nomeEmpresaDigitado = '';
+  let nomeEmpresaFat = '';
+
+  function nomeDigitado(nome) {
+    const n = String(nome || '').trim();
+    return n === 'Minha Empresa' ? '' : n;
+  }
+
+  function aplicarNomeEmpresa() {
+    $('companyName').textContent = nomeEmpresaDigitado || nomeEmpresaFat || 'Minha Empresa';
+    $('cfgCompanyName').placeholder = nomeEmpresaFat ? nomeEmpresaFat + ' (do FAT)' : '';
+  }
+
   function applyData(data) {
     if (!data) return;
+    if (data.empresaNome !== undefined) {
+      nomeEmpresaFat = data.empresaNome || '';
+      aplicarNomeEmpresa();
+    }
     state.data.saidas = data.saidas || [];
     state.data.entradas = data.entradas || [];
     state.data.receber = data.receber || { ate30: 0, mais30: 0 };
@@ -1237,7 +1257,8 @@
   }
 
   window.api.getConfig().then((cfg) => {
-    $('companyName').textContent = cfg.companyName || 'Minha Empresa';
+    nomeEmpresaDigitado = nomeDigitado(cfg.companyName);
+    aplicarNomeEmpresa();
     applyLogo(cfg.logoDataUrl);
     applyTheme(cfg.theme);
     metaConfig.metaCrescimentoPct = cfg.metaCrescimentoPct != null ? cfg.metaCrescimentoPct : 10;
@@ -1281,7 +1302,7 @@
 
   function openSettings() {
     window.api.getConfig().then((cfg) => {
-      $('cfgCompanyName').value = cfg.companyName || '';
+      $('cfgCompanyName').value = nomeDigitado(cfg.companyName);
       pendingLogoDataUrl = cfg.logoDataUrl || '';
       updateLogoPreview();
       originalTheme = cfg.theme || 'dark';
@@ -1341,7 +1362,7 @@
 
   $('cfgSave').addEventListener('click', () => {
     const newConfig = {
-      companyName: $('cfgCompanyName').value.trim() || 'Minha Empresa',
+      companyName: $('cfgCompanyName').value.trim(),
       logoDataUrl: pendingLogoDataUrl,
       theme: pendingTheme,
       paths: {
@@ -1361,7 +1382,8 @@
       metaFixaSaidas: $('cfgMetaFixaSaidas').value.trim(),
     };
     window.api.saveConfig(newConfig).then((cfg) => {
-      $('companyName').textContent = cfg.companyName;
+      nomeEmpresaDigitado = nomeDigitado(cfg.companyName);
+      aplicarNomeEmpresa();
       applyLogo(cfg.logoDataUrl);
       applyTheme(cfg.theme);
       restyleChartsForTheme();
