@@ -247,36 +247,47 @@
           </div>
         </div>
       </label>
-      <label>Caminho do arquivo de Saídas (ftnota.dbf)
-        <input type="text" id="cfgFtnota" placeholder="\\SERVIDOR\pasta\ftnota.dbf">
-      </label>
-      <label>Caminho do arquivo de Entradas (ftentr.dbf)
-        <input type="text" id="cfgFtentr" placeholder="\\SERVIDOR\pasta\ftentr.dbf">
-      </label>
-      <label>Caminho do arquivo de Devoluções de venda (ftcomp.dbf)
-        <input type="text" id="cfgFtcomp" placeholder="\\SERVIDOR\pasta\ftcomp.dbf">
-      </label>
-      <label>Caminho do arquivo de Contas a receber (ftcrec.dbf)
-        <input type="text" id="cfgFtcrec" placeholder="\\SERVIDOR\pasta\ftcrec.dbf">
-      </label>
-      <label>Caminho do arquivo de Contas a pagar (ftcpag.dbf)
-        <input type="text" id="cfgFtcpag" placeholder="\\SERVIDOR\pasta\ftcpag.dbf">
-      </label>
-      <label>Caminho do arquivo de Itens de venda (ftlnota.dbf)
-        <input type="text" id="cfgFtlnota" placeholder="\\SERVIDOR\pasta\ftlnota.dbf">
-      </label>
-      <label>Caminho do arquivo de Grupos (ftgrup.dbf)
-        <input type="text" id="cfgFtgrup" placeholder="\\SERVIDOR\pasta\ftgrup.dbf">
-      </label>
-      <label>Caminho do arquivo de Cadastro de produtos (ftmpri.dbf)
-        <input type="text" id="cfgFtmpri" placeholder="\\SERVIDOR\pasta\ftmpri.dbf">
-      </label>
-      <label>Caminho do arquivo de Itens de compra (ftlentr.dbf)
-        <input type="text" id="cfgFtlentr" placeholder="\\SERVIDOR\pasta\ftlentr.dbf">
-      </label>  
-      <label>Caminho do arquivo de Natureza de operação (CFOP) (ftnope.dbf)
-        <input type="text" id="cfgFtnope" placeholder="\\SERVIDOR\pasta\ftnope.dbf">
-      </label>
+      <label for="cfgPastaDados">Pasta dos arquivos do FAT</label>
+      <div class="pasta-linha">
+        <input type="text" id="cfgPastaDados" placeholder="Ex.: F:\Sistema ou \\SERVIDOR\Sistema" spellcheck="false" autocomplete="off">
+        <button type="button" class="btn-secondary" id="cfgPastaAplicar">Aplicar</button>
+      </div>
+      <div class="pasta-status" id="cfgPastaStatus" aria-live="polite"></div>
+      <button type="button" class="avancado-toggle" id="cfgAvancadoBtn" aria-expanded="false" aria-controls="cfgAvancado"><span class="seta">&#9656;</span> Configurações Avançadas</button>
+      <div class="avancado" id="cfgAvancado" hidden>
+        <p class="avancado-ajuda">O "Aplicar" preenche estes campos a partir da pasta. Se algum arquivo estiver em outro lugar, troque o caminho dele aqui e clique em "Verificar arquivos".</p>
+        <label>Saídas (ftnota.dbf)
+          <input type="text" class="cfg-caminho" data-chave="ftnota" spellcheck="false" autocomplete="off">
+        </label>
+        <label>Entradas (ftentr.dbf)
+          <input type="text" class="cfg-caminho" data-chave="ftentr" spellcheck="false" autocomplete="off">
+        </label>
+        <label>Devoluções de venda (ftcomp.dbf)
+          <input type="text" class="cfg-caminho" data-chave="ftcomp" spellcheck="false" autocomplete="off">
+        </label>
+        <label>Contas a receber (ftcrec.dbf)
+          <input type="text" class="cfg-caminho" data-chave="ftcrec" spellcheck="false" autocomplete="off">
+        </label>
+        <label>Contas a pagar (ftcpag.dbf)
+          <input type="text" class="cfg-caminho" data-chave="ftcpag" spellcheck="false" autocomplete="off">
+        </label>
+        <label>Itens de venda (ftlnota.dbf)
+          <input type="text" class="cfg-caminho" data-chave="ftlnota" spellcheck="false" autocomplete="off">
+        </label>
+        <label>Grupos (ftgrup.dbf)
+          <input type="text" class="cfg-caminho" data-chave="ftgrup" spellcheck="false" autocomplete="off">
+        </label>
+        <label>Cadastro de produtos (ftmpri.dbf)
+          <input type="text" class="cfg-caminho" data-chave="ftmpri" spellcheck="false" autocomplete="off">
+        </label>
+        <label>Itens de compra (ftlentr.dbf)
+          <input type="text" class="cfg-caminho" data-chave="ftlentr" spellcheck="false" autocomplete="off">
+        </label>
+        <label>Natureza de operação (CFOP) (ftnope.dbf)
+          <input type="text" class="cfg-caminho" data-chave="ftnope" spellcheck="false" autocomplete="off">
+        </label>
+        <button type="button" class="btn-secondary" id="cfgVerificar">Verificar arquivos</button>
+      </div>
       <label>Atualizar automaticamente a cada (minutos)
         <input type="number" id="cfgRefreshMinutes" min="1" step="1">
       </label>

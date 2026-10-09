@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { Worker } = require('worker_threads');
 const atualizador = require('./src/atualizador');
-const { loadConfig, saveConfig } = require('./src/config-store');
+const { loadConfig, saveConfig, ARQUIVOS_FAT, mesmoCaminho } = require('./src/config-store');
 
 let mainWindow;
 let currentConfig;
@@ -136,6 +136,23 @@ ipcMain.handle('save-config', (event, newConfig) => {
   saveConfig(getUserDataDir(), currentConfig);
   scheduleRefresh();
   return currentConfig;
+});
+
+async function existe(caminho) {
+  try { await fs.promises.access(caminho); return true; } catch (e) { return false; }
+}
+ipcMain.handle('verificar-pasta-dados', async (event, { pasta, caminhos }) => {
+  const base = String(pasta || '').trim();
+  const c = caminhos || {};
+  const arquivos = ARQUIVOS_FAT.map((a) => {
+    const caminho = String(c[a.chave] || '').trim();
+    const automatico = base ? path.win32.join(base, a.arquivo) : '';
+    // "outra pasta" = o caminho do campo não é o que o Aplicar colocaria
+    return { chave: a.chave, arquivo: a.arquivo, caminho, personalizado: !!caminho && !!automatico && !mesmoCaminho(caminho, automatico) };
+  });
+  const pastaExiste = base ? await existe(base) : false;
+  await Promise.all(arquivos.map(async (a) => { a.existe = a.caminho ? await existe(a.caminho) : false; }));
+  return { pastaExiste, arquivos };
 });
 
 ipcMain.handle('get-dashboard-data', () => lastData);

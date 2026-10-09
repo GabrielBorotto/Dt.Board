@@ -1,13 +1,13 @@
 :root{
   --bg:#0b0f17; --panel:#121826; --panel-2:#0e131d; --line:#232c3d;
   --text:#eef2f8; --muted:#8b95a8; --gold:#e0a941; --gold-soft:rgba(224,169,65,.15);
-  --green:#3ecf8e; --red:#e5566d; --compare:#7fc4c9; 
+  --green:#2ca83d; --red:#e5566d; --compare:#dc2626; 
   --font-body:'Segoe UI',system-ui,sans-serif; --font-display:'Segoe UI',system-ui,sans-serif;
 }
 :root[data-theme="light"]{
   --bg:#f3f5fa; --panel:#ffffff; --panel-2:#eef1f7; --line:#dde2ec;
   --text:#1a2233; --muted:#6b7486; --gold:#c6820f; --gold-soft:rgba(198,130,15,.15);
-  --green:#188a58; --red:#c42e46; --compare:#1f7a8c; 
+  --green:#0F4D0F; --red:#c42e46; --compare:#dc2626; 
 }
 *{box-sizing:border-box;}
 html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);overflow:hidden;}
@@ -199,3 +199,25 @@ body.edit-mode #resetLayoutBtn{display:flex;}
 .btn-primary,.btn-secondary{padding:.55em 1.1em;border-radius:7px;border:1px solid var(--line);cursor:pointer;font-family:var(--font-body);font-size:13px;}
 .btn-primary{background:var(--gold);color:#1a1200;border-color:var(--gold);font-weight:600;}
 .btn-secondary{background:transparent;color:var(--text);}
+
+.pasta-linha{display:flex;gap:8px;margin:4px 0 8px;}
+.pasta-linha input{flex:1;min-width:0;}
+.modal label[for="cfgPastaDados"]{margin-bottom:0;}
+.pasta-status{margin:0 0 12px;font-size:12.5px;}
+.pasta-status:empty{margin:0;}
+.pasta-resumo{font-weight:600;margin-bottom:6px;}
+.pasta-resumo.ok{color:var(--green);}
+.pasta-resumo.faltando{color:var(--red);}
+.pasta-resumo.verificando{color:var(--muted);font-weight:400;}
+.pasta-lista{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:3px 14px;}
+.pasta-lista li{display:flex;gap:6px;align-items:baseline;color:var(--text);}
+.pasta-lista li .marca{width:1em;font-weight:700;}
+.pasta-lista li.ok .marca{color:var(--green);}
+.pasta-lista li.falta,.pasta-lista li.falta .marca{color:var(--red);}
+.pasta-lista li .personalizado{font-size:.85em;color:var(--gold);}
+.avancado-toggle{display:flex;align-items:center;gap:6px;background:transparent;border:none;color:var(--muted);font-family:var(--font-body);font-size:13px;padding:4px 0;margin:0 0 10px;cursor:pointer;}
+.avancado-toggle:hover{color:var(--text);}
+.avancado-toggle .seta{display:inline-block;transition:transform .15s;color:var(--gold);}
+.avancado-toggle[aria-expanded="true"] .seta{transform:rotate(90deg);}
+.avancado{border-left:2px solid var(--line);padding-left:12px;margin-bottom:12px;}
+.avancado-ajuda{margin:0 0 10px;font-size:12px;color:var(--muted);}

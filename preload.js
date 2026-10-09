@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('api', {
   getConfig: () => ipcRenderer.invoke('get-config'),
   saveConfig: (cfg) => ipcRenderer.invoke('save-config', cfg),
+  verificarPastaDados: (pasta, caminhos) => ipcRenderer.invoke('verificar-pasta-dados', { pasta, caminhos }),
   getDashboardData: () => ipcRenderer.invoke('get-dashboard-data'),
   refreshNow: () => ipcRenderer.invoke('refresh-now'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),

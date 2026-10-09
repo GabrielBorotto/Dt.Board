@@ -317,6 +317,22 @@
     afterDatasetsDraw(chart) { chart.ctx.restore(); },
   };
 
+  //Caixinha de informações do gráfico só perto de uma linha
+  const DISTANCIA_TOOLTIP = 24;
+  Chart.Interaction.modes.pertoDaLinha = function (chart, e, options,  useFinalPosition) {
+    const itens = Chart.Interaction.modes.index(chart, e, { intersect: false, axis: 'x' }, useFinalPosition);
+    if (!itens.length) return itens;
+    const pos = Chart.helpers.getRelativePosition(e, chart);
+    const perto = chart.data.datasets.some((ds, i) => {
+      if (!chart.isDatasetVisible(i)) return false;
+      const linha = chart.getDatasetMeta(i).dataset; // a linha inteira do dataset
+      if (!linha || typeof linha.interpolate !== 'function') return false;
+      const ponto = linha.interpolate({ x: pos.x }, 'x'); // onde a linha passa nessa posição do mouse
+      return !!ponto && Math.abs(ponto.y - pos.y) <= DISTANCIA_TOOLTIP;
+    });
+    return perto ? itens : [];
+  };
+
   function ensureChart(canvasId) {
     if (charts[canvasId]) return charts[canvasId];
     const ctx = $(canvasId).getContext('2d');
@@ -362,7 +378,7 @@
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
+        interaction: { mode: 'pertoDaLinha', intersect: false },
         plugins: { legend: { display: false }, tooltip: {
           callbacks: { label: (ctx) => {
             const brutos = ctx.datasetIndex === 1 ? charts[canvasId]._valoresReaisAnoPassado : charts[canvasId]._valoresReais;
@@ -415,7 +431,7 @@
         responsive: true,
         maintainAspectRatio: false,
         animation: false,
-        interaction: { mode: 'index', intersect: false },
+        interaction: { mode: 'pertoDaLinha', intersect: false },
         plugins: {
           legend: {
             display: true, position: 'top', align: 'start',
@@ -979,8 +995,8 @@
   const GRID_COLS = 12, GRID_ROWS = 40, GAP = 12, MIN_SPAN = 2;
 
   const DEFAULT_LAYOUT = {
-    saidas:   { col: 1, colSpan: 12, row: 1,  rowSpan: 11 }, // 1 - prioridade maxima, bem grande
-    margem:   { col: 1, colSpan: 12, row: 12, rowSpan: 9 }, // 2 - tambem grande, mais alta ainda (tabela densa)
+    saidas:   { col: 1, colSpan: 12, row: 1,  rowSpan: 10 }, // 1 - prioridade maxima, bem grande
+    margem:   { col: 1, colSpan: 12, row: 11, rowSpan: 10 }, // 2 - tambem grande, mais alta ainda (tabela densa)
     entradas: { col: 1, colSpan: 8, row: 21, rowSpan: 9 },  // 3
     impostos: { col: 9, colSpan: 4, row: 21, rowSpan: 5 },  // 4
     receber:  { col: 9, colSpan: 4,  row: 26, rowSpan: 2 },  // 5 - menor prioridade, embaixo de tudo
@@ -1300,6 +1316,88 @@
     $('themeDarkBtn').classList.toggle('active', pendingTheme === 'dark');
   }
 
+    // ---------- Pasta dos arquivos do FAT (Configurações) ----------
+  // "Aplicar" preenche os 10 campos com pasta\arquivo.dbf e confere se os arquivos existem.
+  // Nada é conferido enquanto se digita. Quem confere é o main.js (a tela não acessa o disco).
+  let conferenciaPedido = 0;
+
+  function juntarPasta(pasta, arquivo) {
+    return pasta.replace(/[\\/]+$/, '') + '\\' + arquivo;
+  }
+
+  // Os 10 caminhos, como estão nos campos
+  function lerCaminhos() {
+    const c = {};
+    document.querySelectorAll('.cfg-caminho').forEach((i) => { c[i.dataset.chave] = i.value.trim(); });
+    return c;
+  }
+
+  function preencherPelaPasta(pasta) {
+    document.querySelectorAll('.cfg-caminho').forEach((i) => { i.value = juntarPasta(pasta, i.dataset.chave + '.dbf'); });
+  }
+
+  function mostrarConferencia(r) {
+    const caixa = $('cfgPastaStatus');
+    if (!r.arquivos.some((a) => a.caminho)) {
+      caixa.innerHTML = '<div class="pasta-resumo faltando">✗ Nenhum caminho preenchido. Digite a pasta e clique em Aplicar.</div>';
+      return;
+    }
+    if (!r.pastaExiste && !r.arquivos.some((a) => a.existe)) {
+      caixa.innerHTML = '<div class="pasta-resumo faltando">✗ Pasta não encontrada. Confira se o caminho está certo e se o computador enxerga a rede.</div>';
+      return;
+    }
+    const achados = r.arquivos.filter((a) => a.existe).length;
+    const total = r.arquivos.length;
+    const resumo = achados === total
+      ? '<div class="pasta-resumo ok">✓ ' + achados + ' de ' + total + ' arquivos encontrados</div>'
+      : '<div class="pasta-resumo faltando">✗ ' + achados + ' de ' + total + ' arquivos encontrados — os que faltam ficam sem dados</div>';
+    const lista = '<ul class="pasta-lista">' + r.arquivos.map((a) =>
+      '<li class="' + (a.existe ? 'ok' : 'falta') + '" title="' + escapeHtml(a.caminho) + '">' +
+      '<span class="marca">' + (a.existe ? '✓' : '✗') + '</span>' + escapeHtml(a.arquivo) +
+      (a.personalizado ? ' <span class="personalizado">· outra pasta</span>' : '') + '</li>'
+    ).join('') + '</ul>';
+    caixa.innerHTML = resumo + lista;
+  }
+
+  function verificarArquivos() {
+    $('cfgPastaStatus').innerHTML = '<div class="pasta-resumo verificando">Procurando os arquivos…</div>';
+    const meu = ++conferenciaPedido; // se mexerem antes da resposta chegar, ela é ignorada
+    window.api.verificarPastaDados($('cfgPastaDados').value.trim(), lerCaminhos())
+      .then((r) => { if (meu === conferenciaPedido) mostrarConferencia(r); });
+  }
+
+  function aplicarPasta() {
+    const pasta = $('cfgPastaDados').value.trim();
+    if (!pasta) {
+      $('cfgPastaStatus').innerHTML = '<div class="pasta-resumo faltando">✗ Digite a pasta antes de aplicar.</div>';
+      $('cfgPastaDados').focus();
+      return;
+    }
+    preencherPelaPasta(pasta);
+    verificarArquivos();
+  }
+
+  // Mexeu depois de conferir: o resultado antigo pode estar errado, então some
+  function limparConferencia() {
+    conferenciaPedido++;
+    $('cfgPastaStatus').innerHTML = '';
+  }
+
+  function abrirFecharAvancadas(abrir) {
+    $('cfgAvancado').hidden = !abrir;
+    $('cfgAvancadoBtn').setAttribute('aria-expanded', String(abrir));
+  }
+
+  // (o "if" protege o app: se os botões novos ainda não estiverem no index.html, o app abre normal)
+  if ($('cfgPastaAplicar') && $('cfgVerificar')) {
+    $('cfgPastaAplicar').addEventListener('click', aplicarPasta);
+    $('cfgPastaDados').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); aplicarPasta(); } });
+    $('cfgPastaDados').addEventListener('input', limparConferencia);
+    document.querySelectorAll('.cfg-caminho').forEach((i) => i.addEventListener('input', limparConferencia));
+    $('cfgVerificar').addEventListener('click', verificarArquivos);
+    $('cfgAvancadoBtn').addEventListener('click', () => abrirFecharAvancadas($('cfgAvancado').hidden));
+  }
+
   function openSettings() {
     window.api.getConfig().then((cfg) => {
       $('cfgCompanyName').value = nomeDigitado(cfg.companyName);
@@ -1308,16 +1406,10 @@
       originalTheme = cfg.theme || 'dark';
       pendingTheme = originalTheme;
       updateThemeButtons();
-      $('cfgFtnota').value = cfg.paths.ftnota || '';
-      $('cfgFtentr').value = cfg.paths.ftentr || '';
-      $('cfgFtcomp').value = cfg.paths.ftcomp || '';
-      $('cfgFtcrec').value = cfg.paths.ftcrec || '';
-      $('cfgFtcpag').value = cfg.paths.ftcpag || '';
-      $('cfgFtlnota').value = cfg.paths.ftlnota || '';
-      $('cfgFtgrup').value = cfg.paths.ftgrup || '';
-      $('cfgFtmpri').value = cfg.paths.ftmpri || '';
-      $('cfgFtlentr').value = cfg.paths.ftlentr || '';
-      $('cfgFtnope').value = cfg.paths.ftnope || '';
+      $('cfgPastaDados').value = cfg.pastaDados || '';
+      document.querySelectorAll('.cfg-caminho').forEach((i) => { i.value = (cfg.paths || {})[i.dataset.chave] || ''; });
+      abrirFecharAvancadas(false);
+      limparConferencia(); // ao abrir, nada é conferido (só no Aplicar ou no Verificar)
       $('cfgRefreshMinutes').value = cfg.refreshMinutes || 5;
       $('cfgMetaCrescimentoPct').value = cfg.metaCrescimentoPct != null ? cfg.metaCrescimentoPct : 10;
       $('cfgMetaFixaSaidas').value = cfg.metaFixaSaidas || '';
@@ -1361,22 +1453,15 @@
   });
 
   $('cfgSave').addEventListener('click', () => {
+    // segurança: digitou a pasta, não clicou em Aplicar e os 10 campos estão vazios → preenche antes de salvar
+    const pastaDigitada = $('cfgPastaDados').value.trim();
+    if (pastaDigitada && !Object.values(lerCaminhos()).some(Boolean)) preencherPelaPasta(pastaDigitada);
     const newConfig = {
       companyName: $('cfgCompanyName').value.trim(),
       logoDataUrl: pendingLogoDataUrl,
       theme: pendingTheme,
-      paths: {
-        ftnota: $('cfgFtnota').value.trim(),
-        ftentr: $('cfgFtentr').value.trim(),
-        ftcomp: $('cfgFtcomp').value.trim(),
-        ftcrec: $('cfgFtcrec').value.trim(),
-        ftcpag: $('cfgFtcpag').value.trim(),
-        ftlnota: $('cfgFtlnota').value.trim(),
-        ftgrup: $('cfgFtgrup').value.trim(),
-        ftmpri: $('cfgFtmpri').value.trim(),
-        ftlentr: $('cfgFtlentr').value.trim(),
-        ftnope: $('cfgFtnope').value.trim(),
-      },
+      pastaDados: $('cfgPastaDados').value.trim(),
+      paths: lerCaminhos(),
       refreshMinutes: Math.max(1, Number($('cfgRefreshMinutes').value) || 5),
       metaCrescimentoPct: Math.max(0, Number($('cfgMetaCrescimentoPct').value) || 0),
       metaFixaSaidas: $('cfgMetaFixaSaidas').value.trim(),
