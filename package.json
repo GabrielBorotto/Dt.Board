@@ -48,6 +48,7 @@
     ]
   },
   "allowScripts": {
-    "electron@31.7.7": true
+    "electron@31.7.7": true,
+    "electron-winstaller": false
   }
 }
